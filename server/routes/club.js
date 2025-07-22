@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../utils/db');
+const {restrictTo} = require("../middlewares/auth");
 const verifyClubAccess = require('../middlewares/verifyClubAccess'); // Middleware to verify club access
 
 // ✅ GET club by ID (used for dashboard, about page)
@@ -85,17 +86,36 @@ router.get('/:clubId/events', async (req, res) => {
   }
 });
 
+router.get('/:clubId/subscriptions', async (req, res) => {
+  const { clubId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT cs.id, cs.subscribed_at, u.id as user_id, u.name, u.email
+       FROM club_subscriptions cs
+       JOIN users u ON u.id = cs.user_id
+       WHERE cs.club_id = $1`,
+      [clubId]
+    );
+
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('Error fetching club subscriptions:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Create new event for club
 router.post('/:clubId/events', async (req, res) => {
   const clubId = req.params.clubId;
-  const { title, description, date } = req.body;
-
+  const { title, description, event_date } = req.body;
+  console.log("Creating event for club:", clubId, "with data:", { title, description, event_date });
   try {
     const result = await pool.query(`
       INSERT INTO events (club_id, title, description, event_date)
       VALUES ($1, $2, $3, $4)
       RETURNING *
-    `, [clubId, title, description, date]);
+    `, [clubId, title, description, event_date]);
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -115,10 +135,11 @@ router.get('/:clubId/events/:eventId', verifyClubAccess, async (req, res) => {
 // PUT (edit) event
 router.put('/:clubId/events/:eventId', verifyClubAccess, async (req, res) => {
   const { eventId } = req.params;
-  const { title, description, date } = req.body;
+  const { title, description, event_date } = req.body;
+  console.log("Request to edit event:", { eventId, title, description, event_date });
   const result = await pool.query(`
     UPDATE events SET title = $1, description = $2, event_date = $3 WHERE id = $4 RETURNING *
-  `, [title, description, date, eventId]);
+  `, [title, description, event_date, eventId]);
   res.json(result.rows[0]);
 });
 
@@ -133,6 +154,35 @@ router.delete('/:clubId/events/:eventId', verifyClubAccess, async (req, res) => 
     res.status(500).json({ error: 'Delete failed' });
   }
 });
+
+// GET /api/users/search?q=term&universityId=...
+router.get('/users/search', async (req, res) => {
+  const { q, universityId } = req.query;
+  console.log("This backend is hit with query:", q, "and universityId:", universityId);
+
+  if (!q || !universityId) {
+    return res.status(400).json({ error: 'Missing query or universityId' });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT id, name, email, profile_pic 
+      FROM users 
+      WHERE university_id = $1 
+        AND (name ILIKE $2 OR email ILIKE $2)
+      LIMIT 10
+      `,
+      [universityId, `%${q}%`]
+    );
+    console.log("First user found:", result.rows[0]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 
 
 // Get registrations for event
