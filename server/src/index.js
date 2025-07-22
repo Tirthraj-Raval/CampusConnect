@@ -12,6 +12,13 @@ const adminRoutes = require('../routes/admin');
 const clubRoutes = require('../routes/club'); // adjust path as needed
 const clubAuthRoutes = require('../routes/clubAuth');
 
+const analyticsRoutes = require("../routes/analytics");
+const committeeRoutes = require("../routes/committee");
+const feedbackRoutes = require("../routes/feedback");
+const notificationsRoutes = require("../routes/notifications");
+const certificatesRoutes = require("../routes/certificates");
+const rsvpsRoutes = require("../routes/rsvps");
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -42,6 +49,13 @@ app.use('/api/university', universityRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/club', clubRoutes);
 app.use('/auth/club', clubAuthRoutes);
+// Dashboard routes
+app.use("/api/clubs", analyticsRoutes);
+app.use("/api/clubs", committeeRoutes);
+app.use('/api/clubs', rsvpsRoutes);
+app.use("/api/clubs", feedbackRoutes);
+app.use("/api/clubs", notificationsRoutes);
+app.use("/api/clubs", certificatesRoutes);
 
 // ✅ Auth Routes
 app.get('/auth/google',
