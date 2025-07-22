@@ -5,7 +5,8 @@ function ensureAuthenticated(req, res, next) {
 
 function restrictTo(...roles) {
   return (req, res, next) => {
-    if (!roles.includes(req.user?.role)) {
+    if (!roles.includes(req.user?.type)) {
+      console.log("❌ Access denied for user type:", req.user?.type);
       return res.status(403).json({ message: 'Access denied' });
     }
     next();
