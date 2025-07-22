@@ -20,7 +20,7 @@ const ClubEvents = () => {
     const fetchEvents = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`http://localhost:5000/api/club/${params.club_id}/events`);
+        const res = await fetch(`http://localhost:5000/api/club/${params.club_id}/events`, {credentials: 'include'});
         if (!res.ok) throw new Error('Failed to fetch events');
         const data = await res.json();
         setEvents(data);

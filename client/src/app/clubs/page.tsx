@@ -34,7 +34,7 @@ const categories = [
   'Business',
   'Health',
   'Other'
-];
+];  
 
 const ExploreClubsPage = () => {
   const router = useRouter();
