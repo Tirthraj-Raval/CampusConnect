@@ -125,7 +125,7 @@ router.post('/:clubId/events', async (req, res) => {
 });
 
 // GET single event by ID
-router.get('/:clubId/events/:eventId', verifyClubAccess, async (req, res) => {
+router.get('/:clubId/events/:eventId', async (req, res) => {
   const { eventId } = req.params;
   const result = await pool.query('SELECT * FROM events WHERE id = $1', [eventId]);
   if (result.rows.length === 0) return res.status(404).json({ error: 'Event not found' });
@@ -203,7 +203,7 @@ router.get('/', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT 
-        id, name, description, logo_url, university_id 
+        * 
       FROM clubs
       ORDER BY created_at DESC
     `);
@@ -214,6 +214,72 @@ router.get('/', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+router.get('/events/all', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT events.*, clubs.name AS club_name
+       FROM events
+       JOIN clubs ON events.club_id = clubs.id
+       WHERE status = 'Published'
+       ORDER BY event_date DESC`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching all events:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
+// Search events by name and date
+router.get('/events/search', async (req, res) => {
+  const { query } = req.query;
+  console.log("Search query received:", query);
+
+  if (!query || query.trim() === '') {
+    return res.json([]);
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT * FROM events 
+      WHERE LOWER(title) LIKE LOWER($1)
+      ORDER BY event_date DESC
+      `,
+      [`%${query}%`]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Event search error:', err.message);
+    res.status(500).json({ error: 'Failed to search events' });
+  }
+});
+
+
+router.get('/events/:eventId', async (req, res) => {
+  const { eventId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM events WHERE id = $1`,
+      [eventId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching event by ID:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 
 // 🔜 (Planned) GET club events — we’ll add this later
 // router.get('/:id/events', async (req, res) => { ... });
