@@ -5,6 +5,8 @@ const session = require('express-session');
 const passport = require('passport');
 require('dotenv').config();
 require('../config/passport');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const pool = require('../utils/db');
 const universityRoutes = require('../routes/university');
@@ -19,8 +21,22 @@ const notificationsRoutes = require("../routes/notifications");
 const certificatesRoutes = require("../routes/certificates");
 const rsvpsRoutes = require("../routes/rsvps");
 
+const studentRoutes = require('../routes/student');
+const studentAuth = require('../routes/studentAuth');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*', // or restrict to your frontend domain
+    methods: ['GET', 'POST'],
+  },
+});
+
+// Store Socket.IO instance in app for use in controllers
+app.set('socketio', io);
 
 // ✅ Middleware
 app.use(cors({
@@ -57,12 +73,38 @@ app.use("/api/clubs", feedbackRoutes);
 app.use("/api/clubs", notificationsRoutes);
 app.use("/api/clubs", certificatesRoutes);
 
+// Student routes
+app.use('/api/student', studentRoutes);
+app.use('/auth/student', studentAuth);
+
+
+// Socket.IO logic
+io.on('connection', (socket) => {
+  console.log('🔌 New client connected:', socket.id);
+
+  // Join room for an event to receive real-time RSVP updates
+  socket.on('join_event_room', (eventId) => {
+    socket.join(`event_${eventId}`);
+    console.log(`🟢 Socket ${socket.id} joined event_${eventId}`);
+  });
+
+  // Optionally: leave room
+  socket.on('leave_event_room', (eventId) => {
+    socket.leave(`event_${eventId}`);
+    console.log(`🔴 Socket ${socket.id} left event_${eventId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('❌ Client disconnected:', socket.id);
+  });
+});
+
 // ✅ Auth Routes
-app.get('/auth/google',
+app.get('/auth//student/google',
   passport.authenticate('student-google', { scope: ['profile', 'email'] })
 );
 
-app.get('/auth/google/callback',
+app.get('/auth/student/google/callback',
   passport.authenticate('student-google', {
     failureRedirect: 'http://localhost:3000/stundent-login'
   }),
@@ -128,6 +170,6 @@ app.get('/api/health', (req, res) => {
   res.json({ message: 'Backend running fine' });
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server listening on http://localhost:${PORT}`);
 });
