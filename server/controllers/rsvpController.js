@@ -8,11 +8,16 @@ exports.getActiveEventRSVPs = async (req, res) => {
 
   try {
     const result = await pool.query(`
-      SELECT e.id AS event_id, e.title AS event_name, r.user_id, s.name AS student_name, r.rsvp_time
-      FROM rsvps r
-      JOIN events e ON e.id = r.event_id
-      JOIN users s ON s.id = r.user_id
+      SELECT 
+        e.id AS id,
+        e.title AS title,
+        e.event_date AS event_date,
+        e.max_capacity,
+        COUNT(r.id) AS rsvps
+      FROM events e
+      LEFT JOIN rsvps r ON e.id = r.event_id
       WHERE e.club_id = $1 AND e.status = 'Published'
+      GROUP BY e.id, e.title, e.event_date, e.max_capacity
     `, [clubId]);
 
     res.json(result.rows);
@@ -21,6 +26,7 @@ exports.getActiveEventRSVPs = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
 
 exports.downloadRSVPsByEvent = async (req, res) => {
   const { clubId, eventId } = req.params;
