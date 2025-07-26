@@ -63,7 +63,7 @@ passport.deserializeUser(async (obj, done) => {
 passport.use('student-google', new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: 'http://localhost:5000/auth/google/callback',
+  callbackURL: 'http://localhost:5000/auth/student/google/callback',
 }, async (accessToken, refreshToken, profile, done) => {
   const email = profile.emails[0].value;
   const domain = email.split('@')[1];
