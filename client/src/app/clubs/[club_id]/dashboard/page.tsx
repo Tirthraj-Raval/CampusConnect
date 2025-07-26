@@ -58,6 +58,7 @@ import {
 } from 'chart.js';
 import { toast } from 'react-hot-toast';
 import { useParams, usePathname } from 'next/navigation';
+import io from 'socket.io-client'
 
 // Register ChartJS components
 ChartJS.register(
@@ -93,7 +94,7 @@ type Event = {
   image_url?: string;
   rsvps: number;
   views: number;
-  capacity: number;
+  max_capacity: number;
   status: 'Draft' | 'Published' | 'Completed' | 'Cancelled';
   feedback_count: number;
   certificates_generated: number;
@@ -120,7 +121,7 @@ type Feedback = {
 type Subscription = {
   id: string;
   user_id: string;
-  created_at: string;
+  subscribed_at: string;
   status: 'active' | 'unsubscribed';
 };
 
@@ -165,7 +166,7 @@ const [newEvent, setNewEvent] = useState<Partial<Event>>({
   event_date: '',
   time: '',
   location: '',
-  capacity: 0,
+  max_capacity: 0,
   status: 'Draft',
   image_url: '',
 });
@@ -180,7 +181,27 @@ const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
 const [eventsWithCounts, setEventsWithCounts] = useState<(Event & { certificates_generated: number })[]>([]);
 const [rsvpCounts, setRsvpCounts] = useState<Record<string, number>>({});
 const [dropdownOpen, setDropdownOpen] = useState(false);
-  
+const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+const [message, setMessage] = useState('');  
+const socket = io("http://localhost:5000", {
+  transports: ["websocket"],
+  reconnectionAttempts: 5,
+});
+const [eventsWithRsvps, setEventsWithRsvps] = useState<Event[]>([]);
+const [rsvpTrendsData, setRsvpTrendsData] = useState<{
+  labels: string[];
+  datasets: {
+    label: string;
+    data: number[];
+    fill: boolean;
+    borderColor: string;
+    tension: number;
+  }[];
+}>({
+  labels: [],
+  datasets: [],
+});
+
   // Fetch all data for the dashboard
   const fetchData = useCallback(async () => {
     if (!clubId) return;
@@ -202,7 +223,7 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
         fetch(`http://localhost:5000/api/clubs/${clubId}/certificates`, { credentials: 'include' }),
         fetch(`http://localhost:5000/api/clubs/${clubId}/feedbacks`, { credentials: 'include' }),
         fetch(`http://localhost:5000/api/club/${clubId}/subscriptions`, { credentials: 'include' }),
-        fetch(`http://localhost:5000/api/clubs/${clubId}/event-performance`, { credentials: 'include' })
+        fetch(`http://localhost:5000/api/clubs/${clubId}/dashboard/analytics`, { credentials: 'include' })
       ]);
 
       if (!clubRes.ok) throw new Error('Failed to fetch club data');
@@ -222,20 +243,23 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
       const analyticsData = await analyticsRes.json();
 
       // Fetch additional analytics if needed
-      const [feedbackPieRes, subsGrowthRes] = await Promise.all([
+      const [feedbackPieRes, subsGrowthRes, rsvpsRes] = await Promise.all([
         fetch(`http://localhost:5000/api/clubs/${clubId}/feedback-pie`, { credentials: 'include' }),
-        fetch(`http://localhost:5000/api/clubs/${clubId}/subscriber-growth`, { credentials: 'include' })
+        fetch(`http://localhost:5000/api/clubs/${clubId}/subscriber-growth`, { credentials: 'include' }),
+        fetch(`http://localhost:5000/api/clubs/${clubId}/rsvps`, { credentials: 'include' })
       ]);
 
       const feedbackPie = feedbackPieRes.ok ? await feedbackPieRes.json() : [];
       const subscriberGrowth = subsGrowthRes.ok ? await subsGrowthRes.json() : [];
-
+      const rsvpsData = rsvpsRes.ok ? await rsvpsRes.json() : [];
+      console.log("RSVPs Data:", rsvpsData);
       setClubData(club);
       setCommittee(committee);
       setEvents(events);
       setCertificates(certificates);
       setFeedback(feedbackData);
       setSubscriptions(subs);
+      setEventsWithRsvps(rsvpsData);
 
       setAnalytics({
         total_events: events.length,
@@ -381,12 +405,6 @@ useEffect(() => {
   setEventsWithCounts(enriched);
 }, [events, certificates]);
   
-const eventsWithRsvps = useMemo(() => {
-  return events.map(event => ({
-    ...event,
-    rsvps: rsvpCounts[event.id] || 0,
-  }));
-}, [events, rsvpCounts]);
 
 
 const logout = async () => {
@@ -395,6 +413,45 @@ const logout = async () => {
     })
     window.location.href = "/";
   }
+
+  useEffect(() => {
+      socket.on("connect", () => {
+        console.log("✅ Club Dashboard connected to socket:", socket.id);
+      });
+
+      socket.on("disconnect", () => {
+        console.warn("❌ Club Dashboard disconnected from socket.");
+      });
+
+      return () => {
+        socket.disconnect();
+      };
+    }, []);
+
+    useEffect(() => {
+  const fetchTrends = async () => {
+    const res = await fetch(`http://localhost:5000/api/clubs/${clubId}/rsvp-trends`);
+    const data = await res.json(); // [{ date, count }]
+    const labels = data.map((item: { date: string }) => item.date);
+    const counts = data.map((item: { date: string; count: string }) => Number(item.count));
+    console.log("Fecthc Trneds data:", data);
+    setRsvpTrendsData({
+      labels,
+      datasets: [
+        {
+          label: 'RSVPs Over Time',
+          data: counts,
+          fill: false,
+          borderColor: 'rgba(59, 130, 246, 1)',
+          tension: 0.2,
+        },
+      ],
+    });
+  };
+
+  fetchTrends();
+}, [clubId]);
+
 
 
 
@@ -615,19 +672,6 @@ const logout = async () => {
     ]
   };
 
-  const rsvpTrendsData = {
-    labels: analytics?.rsvp_trends?.map(item => item.date.split('-')[2]) || [],
-    datasets: [
-      {
-        label: 'Daily RSVPs',
-        data: analytics?.rsvp_trends?.map(item => item.count) || [],
-        backgroundColor: 'rgba(59, 130, 246, 0.6)',
-        borderColor: 'rgba(59, 130, 246, 1)',
-        borderWidth: 1,
-        tension: 0.4,
-      }
-    ]
-  };
 
   const feedbackDistributionData = {
     labels: ['5 Stars', '4 Stars', '3 Stars', '2 Stars', '1 Star'],
@@ -754,6 +798,9 @@ const logout = async () => {
             >
               <FiCheckCircle className="h-5 w-5" />
               <span>RSVPs</span>
+              <span className="ml-auto bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded-full">
+                {eventsWithRsvps.length}
+              </span>
             </button>
             <button
               onClick={() => setActiveTab('certificates')}
@@ -1273,15 +1320,15 @@ const logout = async () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
-                              {event.rsvps}/{event.capacity} ({Math.round((event.rsvps / event.capacity) * 100)}%)
+                              {event.rsvps}/{event.max_capacity} ({Math.round((event.rsvps / event.max_capacity) * 100)}%)
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                               <div 
                                 className={`h-1.5 rounded-full ${
-                                  (event.rsvps / event.capacity) > 0.75 ? 'bg-emerald-500' :
-                                  (event.rsvps / event.capacity) > 0.5 ? 'bg-yellow-500' : 'bg-red-500'
+                                  (event.rsvps / event.max_capacity) > 0.75 ? 'bg-emerald-500' :
+                                  (event.rsvps / event.max_capacity) > 0.5 ? 'bg-yellow-500' : 'bg-red-500'
                                 }`}
-                                style={{ width: `${(event.rsvps / event.capacity) * 100}%` }}
+                                style={{ width: `${(event.rsvps / event.max_capacity) * 100}%` }}
                               ></div>
                             </div>
                           </td>
@@ -1377,7 +1424,6 @@ const logout = async () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {eventsWithRsvps
-                        .filter(e => e.status === 'Published' && (e.rsvps || 0) > 0)
                         .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
                         .map(event => (
                         <tr key={event.id} className="hover:bg-gray-50">
@@ -1390,11 +1436,11 @@ const logout = async () => {
                             <div className="text-sm text-gray-500">{formatTime(event.event_date)}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{event.rsvps} / {event.capacity}</div>
+                            <div className="text-sm text-gray-900">{event.rsvps} / {event.max_capacity}</div>
                             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                               <div 
                                 className="h-1.5 rounded-full bg-emerald-500" 
-                                style={{ width: `${Math.min(100, (event.rsvps / event.capacity) * 100)}%` }}
+                                style={{ width: `${Math.min(100, (event.rsvps / event.max_capacity) * 100)}%` }}
                               ></div>
                             </div>
                           </td>
@@ -1701,9 +1747,12 @@ const logout = async () => {
                 <div className="flex items-center space-x-3">
                   <button 
                     onClick={() => {
-                      // In a real app, this would open a modal to compose a notification
-                      toast.success('Notification sent to all subscribers');
-                    }}
+                        setIsNotificationModalOpen(true);
+                        fetch(`http://localhost:5000/api/clubs/${clubId}/events`)
+                          .then((res) => res.json())
+                          .then((data) => setEvents(data))
+                          .catch(() => toast.error("Failed to load events"));
+                      }}
                     className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-sky-500 text-white font-medium rounded-lg shadow-sm hover:shadow-md transition-all"
                   >
                     <FiMail className="h-5 w-5" />
@@ -1801,18 +1850,23 @@ const logout = async () => {
                             <div className="text-sm text-gray-500">{sub.user_id}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{formatDate(sub.created_at)}</div>
-                            <div className="text-sm text-gray-500">{getTimeSince(sub.created_at)}</div>
+                            <div className="text-sm text-gray-900">{formatDate(sub.subscribed_at)}</div>
+                            <div className="text-sm text-gray-500">{getTimeSince(sub.subscribed_at)}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{getTimeSince(new Date(Date.now() - Math.floor(Math.random() * 1000 * 60 * 60 * 24 * 7)).toISOString())}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              sub.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                              !sub.status || sub.status === 'active'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
                             }`}>
-                              {sub.status.charAt(0).toUpperCase() + sub.status.slice(1)}
+                              {sub.status
+                                ? sub.status.charAt(0).toUpperCase() + sub.status.slice(1)
+                                : 'Active'}
                             </span>
+
                           </td>
                         </tr>
                       ))}
@@ -2216,13 +2270,13 @@ const logout = async () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
                     <input
                       type="number"
-                      value={selectedEvent ? selectedEvent.capacity : newEvent.capacity}
+                      value={selectedEvent ? selectedEvent.max_capacity : newEvent.max_capacity}
                       onChange={(e) => {
                         const value = parseInt(e.target.value) || 0;
                         if (selectedEvent) {
-                          setSelectedEvent({ ...selectedEvent, capacity: value });
+                          setSelectedEvent({ ...selectedEvent, max_capacity: value });
                         } else {
-                          setNewEvent({ ...newEvent, capacity: value });
+                          setNewEvent({ ...newEvent, max_capacity: value });
                         }
                       }}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
@@ -2310,7 +2364,7 @@ const logout = async () => {
                             event_date: selectedEvent.event_date,
                             time: selectedEvent.time,
                             location: selectedEvent.location,
-                            capacity: selectedEvent.capacity,
+                            max_capacity: selectedEvent.max_capacity,
                             status: selectedEvent.status,
                             image_url: selectedEvent.image_url
                           });
@@ -2672,6 +2726,93 @@ const logout = async () => {
 </AnimatePresence>
 
 
+  <AnimatePresence>
+  {isNotificationModalOpen && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+    >
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 20, opacity: 0 }}
+        className="bg-white rounded-xl shadow-xl w-full max-w-md"
+      >
+        <div className="p-6 space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-bold">Send Notification</h3>
+            <button onClick={() => setIsNotificationModalOpen(false)} className="text-gray-500 hover:text-gray-700">
+              <FiXCircle className="h-6 w-6" />
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Select Event</label>
+            <select
+              value={selectedEventId || ''}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="" disabled>Select an event</option>
+              {events.map((e: any) => (
+              <option key={e.id} value={e.id}>{e.title}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="What's the update?"
+              rows={4}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              onClick={() => setIsNotificationModalOpen(false)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+            >
+              Cancel
+            </button>
+           <button
+              onClick={async () => {
+                if (!selectedEventId || !message.trim()) {
+                  toast.error("Event and message are required");
+                  return;
+                }
+
+                const res = await fetch(`http://localhost:5000/api/clubs/${clubId}/events/${selectedEventId}/notify`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ eventId: selectedEventId, message }),
+                });
+
+                if (res.ok) {
+                  toast.success("Notification sent!");
+                  setIsNotificationModalOpen(false);
+                  setMessage('');
+                  setSelectedEventId('');
+                } else {
+                  toast.error("Failed to send notification");
+                }
+              }}
+              className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition"
+            >
+              Send
+            </button>
+
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
 
 
 
