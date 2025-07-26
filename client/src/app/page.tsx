@@ -59,7 +59,7 @@ export default function HomePage() {
       await fetch('http://localhost:5000/auth/logout', { credentials: 'include' })
       window.location.reload()
     } else {
-      window.location.href = 'http://localhost:5000/auth/google'
+      window.location.href = 'http://localhost:5000/auth/student/google'
     }
   }
 

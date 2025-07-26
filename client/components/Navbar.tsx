@@ -46,7 +46,7 @@ export default function Navbar({ scrolled, user, userType, logout }: NavbarProps
           ) : (
             <div className="flex gap-3">
               <motion.button
-                onClick={() => (window.location.href = 'http://localhost:5000/auth/google')}
+                onClick={() => (window.location.href = 'http://localhost:5000/auth/student/google')}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-sky-500 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition"
@@ -152,7 +152,7 @@ export default function Navbar({ scrolled, user, userType, logout }: NavbarProps
                 <div className="flex flex-wrap justify-center gap-3">
                   <motion.button
                     onClick={() =>
-                      (window.location.href = 'http://localhost:5000/auth/google')
+                      (window.location.href = 'http://localhost:5000/auth/student/google')
                     }
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
