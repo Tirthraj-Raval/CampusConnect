@@ -2,31 +2,41 @@ const pool = require("../utils/db");
 
 exports.getClubAnalytics = async (req, res) => {
   const { clubId } = req.params;
+
   try {
-    const rsvpStats = await pool.query(
-      "SELECT event_id, COUNT(*) as rsvp_count FROM rsvps WHERE club_id = $1 GROUP BY event_id",
+    // Step 1: Get all published events of the club
+    const eventsRes = await pool.query(
+      `SELECT id AS event_id, title FROM events WHERE club_id = $1 AND status = 'Published'`,
       [clubId]
     );
+    const events = eventsRes.rows;
 
-    const viewStats = await pool.query(
-      "SELECT event_id, COUNT(*) as views FROM event_views WHERE club_id = $1 GROUP BY event_id",
-      [clubId]
+    // Step 2: RSVP counts per event
+    const rsvpRes = await pool.query(
+      `SELECT event_id, COUNT(*) AS rsvp_count FROM rsvps GROUP BY event_id`
     );
+    const rsvpMap = Object.fromEntries(rsvpRes.rows.map(row => [row.event_id, Number(row.rsvp_count)]));
 
-    const feedbackStats = await pool.query(
-      "SELECT event_id, AVG(rating) as avg_rating FROM event_feedbacks WHERE club_id = $1 GROUP BY event_id",
-      [clubId]
+    // Step 3: View counts per event
+    const viewsRes = await pool.query(
+      `SELECT event_id, COUNT(*) AS views FROM event_views GROUP BY event_id`
     );
+    const viewMap = Object.fromEntries(viewsRes.rows.map(row => [row.event_id, Number(row.views)]));
 
-    res.json({
-      rsvp: rsvpStats.rows,
-      views: viewStats.rows,
-      feedbacks: feedbackStats.rows,
-    });
+    // Step 4: Merge
+    const analytics = events.map(event => ({
+      title: event.title,
+      rsvps: rsvpMap[event.event_id] || 0,
+      views: viewMap[event.event_id] || 0
+    }));
+
+    res.json(analytics);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error fetching club analytics:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 };
+
 
 // 📊 Event RSVPs and views
 exports.getEventPerformance = async (req, res) => {
@@ -123,6 +133,28 @@ exports.getCertificateIssuance = async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error('Certificate issuance error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// 📈 RSVP Trends Front page
+exports.getRSVPTrends = async (req, res) => {
+  const { clubId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT DATE(rsvp_time) AS date, COUNT(*) AS count
+       FROM rsvps r
+       JOIN events e ON e.id = r.event_id
+       WHERE e.club_id = $1
+       GROUP BY DATE(rsvp_time)
+       ORDER BY DATE(rsvp_time) ASC`,
+      [clubId]
+    );
+
+    res.json(result.rows); // [{ date: '2025-07-22', count: '5' }, ...]
+  } catch (err) {
+    console.error('RSVP Trends Error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
