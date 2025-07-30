@@ -11,6 +11,7 @@ interface CTAProps {
 }
 
 export default function CTA({ user, userType, logout }: CTAProps) {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
   return (
     <section className="py-24 bg-gradient-to-r from-emerald-500 to-sky-500 text-white text-center px-6 relative overflow-hidden">
       <div className="absolute inset-0 opacity-10">
@@ -69,7 +70,7 @@ export default function CTA({ user, userType, logout }: CTAProps) {
           ) : (
             <div className="flex gap-3">
               <motion.button
-                onClick={() => (window.location.href = 'http://localhost:5000/auth/student/google')}
+                onClick={() => (window.location.href = `${apiBase}/auth/student/google`)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-sky-500 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition"
@@ -79,7 +80,7 @@ export default function CTA({ user, userType, logout }: CTAProps) {
               </motion.button>
 
               <motion.button
-                onClick={() => (window.location.href = 'http://localhost:5000/auth/club/google')}
+                onClick={() => (window.location.href = `${apiBase}/auth/club/google`)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition"

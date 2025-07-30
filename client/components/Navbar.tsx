@@ -15,6 +15,7 @@ interface NavbarProps {
 
 export default function Navbar({ scrolled, user, userType, logout }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
 
   return (
     <nav className={`fixed w-full px-6 md:px-16 py-4 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-sm' : 'bg-transparent'}`}>
@@ -46,7 +47,7 @@ export default function Navbar({ scrolled, user, userType, logout }: NavbarProps
           ) : (
             <div className="flex gap-3">
               <motion.button
-                onClick={() => (window.location.href = 'http://localhost:5000/auth/student/google')}
+                onClick={() => (window.location.href = `${apiBase}/auth/student/google`)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-sky-500 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition"
@@ -56,7 +57,7 @@ export default function Navbar({ scrolled, user, userType, logout }: NavbarProps
               </motion.button>
 
               <motion.button
-                onClick={() => (window.location.href = 'http://localhost:5000/auth/club/google')}
+                onClick={() => (window.location.href = `${apiBase}/auth/club/google`)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition"
@@ -152,7 +153,7 @@ export default function Navbar({ scrolled, user, userType, logout }: NavbarProps
                 <div className="flex flex-wrap justify-center gap-3">
                   <motion.button
                     onClick={() =>
-                      (window.location.href = 'http://localhost:5000/auth/student/google')
+                      (window.location.href = `${apiBase}/auth/student/google`)
                     }
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -170,7 +171,7 @@ export default function Navbar({ scrolled, user, userType, logout }: NavbarProps
 
                   <motion.button
                     onClick={() =>
-                      (window.location.href = 'http://localhost:5000/auth/club/google')
+                      (window.location.href = `${apiBase}/auth/club/google`)
                     }
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}

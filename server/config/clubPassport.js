@@ -3,6 +3,8 @@ const pool = require('../utils/db');
 const passport = require('passport');
 const crypto = require('crypto');
 
+const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+
 function generateUUIDFromGoogleId(googleId) {
   const namespace = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
   const hash = crypto.createHash('sha1')
@@ -20,7 +22,7 @@ function generateUUIDFromGoogleId(googleId) {
 passport.use('club-google', new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: 'http://localhost:5000/auth/club/google/callback',
+  callbackURL: `${backendUrl}/auth/club/google/callback`,
 }, async (accessToken, refreshToken, profile, done) => {
   const email = profile.emails[0].value;
   const googleId = profile.id;

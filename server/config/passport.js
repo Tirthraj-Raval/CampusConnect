@@ -4,6 +4,7 @@ const pool = require('../utils/db');
 const crypto = require('crypto');
 
 const allowedDomain = 'ahduni.edu.in';
+const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
 
 function generateUUIDFromGoogleId(googleId) {
   const namespace = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
@@ -63,7 +64,7 @@ passport.deserializeUser(async (obj, done) => {
 passport.use('student-google', new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: 'http://localhost:5000/auth/student/google/callback',
+  callbackURL: `${backendUrl}/auth/student/google/callback`,
 }, async (accessToken, refreshToken, profile, done) => {
   const email = profile.emails[0].value;
   const domain = email.split('@')[1];
@@ -120,7 +121,7 @@ passport.use('student-google', new GoogleStrategy({
 passport.use('club-google', new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: 'http://localhost:5000/auth/club/google/callback',
+  callbackURL: `${backendUrl}/auth/club/google/callback`,
 }, async (accessToken, refreshToken, profile, done) => {
   const email = profile.emails[0].value;
   const googleId = profile.id;
