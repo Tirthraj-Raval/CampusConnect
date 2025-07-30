@@ -55,7 +55,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     secure: true, // set to true if using HTTPS
-    httpOnly: false,
+    httpOnly: true,
     sameSite: 'none'
   }
 }));
@@ -103,7 +103,7 @@ io.on('connection', (socket) => {
 });
 
 // ✅ Auth Routes
-app.get('/auth//student/google',
+app.get('/auth/student/google',
   passport.authenticate('student-google', { scope: ['profile', 'email'] })
 );
 
