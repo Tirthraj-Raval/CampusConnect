@@ -74,48 +74,86 @@ router.put('/:clubId', async (req, res) => {
 });
 
 // Get events for a club
+// Get events for a club with RSVP count and all RSVPs
 router.get('/:clubId/events', async (req, res) => {
   const clubId = req.params.clubId;
 
   try {
-    const result = await pool.query(`SELECT * FROM events WHERE club_id = $1 ORDER BY event_date DESC`, [clubId]);
-    res.json(result.rows);
+    const eventsResult = await pool.query(
+      `SELECT * FROM events WHERE club_id = $1 ORDER BY event_date DESC`,
+      [clubId]
+    );
+
+    const events = eventsResult.rows;
+
+    // For each event, fetch its RSVP count and full RSVP data
+    const enrichedEvents = await Promise.all(
+      events.map(async (event) => {
+        const rsvpCountResult = await pool.query(
+          `SELECT COUNT(*) FROM rsvps WHERE event_id = $1`,
+          [event.id]
+        );
+
+        const allRsvpsResult = await pool.query(
+          `SELECT * FROM rsvps WHERE event_id = $1`,
+          [event.id]
+        );
+
+        return {
+          ...event,
+          rsvps: parseInt(rsvpCountResult.rows[0].count, 10),
+          all_rsvps: allRsvpsResult.rows,
+        };
+      })
+    );
+
+    res.json(enrichedEvents);
   } catch (err) {
-    console.error('Fetch events error:', err);
-    res.status(500).json({ error: 'Could not fetch events' });
+    console.error('Fetch events with RSVPs error:', err);
+    res.status(500).json({ error: 'Could not fetch events with RSVP data' });
   }
 });
+
 
 router.get('/:clubId/subscriptions', async (req, res) => {
   const { clubId } = req.params;
 
   try {
     const result = await pool.query(
-      `SELECT cs.id, cs.subscribed_at, u.id as user_id, u.name, u.email
+      `SELECT cs.id, cs.subscribed_at, 
+              u.id AS user_id, 
+              u.name AS user_name, 
+              u.email AS user_email
        FROM club_subscriptions cs
        JOIN users u ON u.id = cs.user_id
        WHERE cs.club_id = $1`,
       [clubId]
     );
 
-    return res.status(200).json(result.rows);
+    // Add `status: 'active'` field to match frontend expectations
+    const formatted = result.rows.map(sub => ({
+      ...sub,
+      status: 'active',
+    }));
+
+    return res.status(200).json(formatted);
   } catch (err) {
     console.error('Error fetching club subscriptions:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+
 // Create new event for club
 router.post('/:clubId/events', async (req, res) => {
   const clubId = req.params.clubId;
-  const { title, description, event_date } = req.body;
-  console.log("Creating event for club:", clubId, "with data:", { title, description, event_date });
+  const { title, description, event_date, max_capacity, location, status, poster_url } = req.body;
   try {
     const result = await pool.query(`
-      INSERT INTO events (club_id, title, description, event_date)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO events (club_id, title, description, event_date, max_capacity, location, status, poster_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
-    `, [clubId, title, description, event_date]);
+    `, [clubId, title, description, event_date, max_capacity, location, status, poster_url]);
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -135,11 +173,11 @@ router.get('/:clubId/events/:eventId', async (req, res) => {
 // PUT (edit) event
 router.put('/:clubId/events/:eventId', verifyClubAccess, async (req, res) => {
   const { eventId } = req.params;
-  const { title, description, event_date } = req.body;
-  console.log("Request to edit event:", { eventId, title, description, event_date });
+  const { title, description, event_date, max_capacity, location, status, poster_url } = req.body;
+  console.log("Request to edit event:", { eventId, title, description, event_date, max_capacity, location, status, poster_url });
   const result = await pool.query(`
-    UPDATE events SET title = $1, description = $2, event_date = $3 WHERE id = $4 RETURNING *
-  `, [title, description, event_date, eventId]);
+    UPDATE events SET title = $1, description = $2, event_date = $3, max_capacity = $4, location = $5, status = $6, poster_url = $7 WHERE id = $8 RETURNING *
+  `, [title, description, event_date, max_capacity, location, status, poster_url, eventId]);
   res.json(result.rows[0]);
 });
 
@@ -280,6 +318,26 @@ router.get('/events/:eventId', async (req, res) => {
   }
 });
 
+router.get('/clubs/search', async (req, res) => {
+  const query = req.query.query;
+
+  if (!query || query.trim() === '') {
+    return res.status(400).json({ error: 'Missing search query' });
+  }
+
+  try {
+    const searchText = `%${query.trim().toLowerCase()}%`;
+    const result = await pool.query(
+      `SELECT * FROM clubs WHERE LOWER(name) LIKE $1 ORDER BY name LIMIT 20`,
+      [searchText]
+    );
+
+    return res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Error searching clubs:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // 🔜 (Planned) GET club events — we’ll add this later
 // router.get('/:id/events', async (req, res) => { ... });
