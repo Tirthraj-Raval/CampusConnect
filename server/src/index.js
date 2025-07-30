@@ -134,6 +134,7 @@ app.get('/auth/club/google/callback',
 
 // ✅ Auth Session Info
 app.get('/api/auth/me', (req, res) => {
+  console.log("User found in request:", req.user);
   if (req.isAuthenticated() && req.user) {
     const user = req.user;
 

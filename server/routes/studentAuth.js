@@ -18,6 +18,7 @@ router.get('/google/callback',
   }),
   (req, res) => {
     const studentId = req.user.id;
+    console.log('Student authenticated:', req.user);
     return res.redirect(`${appUrl}/students/${studentId}/dashboard`);
   }
 );
