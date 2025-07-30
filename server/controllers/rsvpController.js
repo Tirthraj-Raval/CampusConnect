@@ -9,15 +9,19 @@ exports.getActiveEventRSVPs = async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        e.id AS id,
-        e.title AS title,
-        e.event_date AS event_date,
+        e.id AS event_id,
+        e.title,
+        e.event_date,
         e.max_capacity,
-        COUNT(r.id) AS rsvps
+        r.id AS rsvp_id,
+        r.rsvp_time,
+        u.name AS user_name,
+        u.email AS user_email
       FROM events e
       LEFT JOIN rsvps r ON e.id = r.event_id
+      LEFT JOIN users u ON r.user_id = u.id
       WHERE e.club_id = $1 AND e.status = 'Published'
-      GROUP BY e.id, e.title, e.event_date, e.max_capacity
+      ORDER BY e.event_date DESC, r.rsvp_time ASC
     `, [clubId]);
 
     res.json(result.rows);
@@ -28,8 +32,14 @@ exports.getActiveEventRSVPs = async (req, res) => {
 };
 
 
+
 exports.downloadRSVPsByEvent = async (req, res) => {
-  const { clubId, eventId } = req.params;
+  const { clubId } = req.params;
+  const { eventId } = req.query; // ✅ Fix: read from query string
+
+  if (!eventId || isNaN(eventId)) {
+    return res.status(400).json({ error: 'Invalid or missing eventId' });
+  }
 
   try {
     const result = await pool.query(`
@@ -37,7 +47,7 @@ exports.downloadRSVPsByEvent = async (req, res) => {
       FROM rsvps r
       JOIN users s ON s.id = r.user_id
       WHERE r.event_id = $1
-    `, [eventId]);
+    `, [parseInt(eventId)]); // ✅ Ensure it's an integer
 
     const csvWriter = createObjectCsvWriter({
       path: 'event_rsvps.csv',
