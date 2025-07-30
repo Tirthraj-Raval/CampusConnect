@@ -42,7 +42,7 @@ app.set('socketio', io);
 
 // ✅ Middleware
 app.use(cors({
-  origin: [appUrl, backendUrl],
+  origin: [process.env.APP_URL, process.env.BACKEND_URL, 'http://localhost:3000', 'http://localhost:5000'],
   credentials: true,
 }));
 
