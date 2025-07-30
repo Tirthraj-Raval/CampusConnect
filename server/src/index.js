@@ -54,9 +54,9 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true, // set to true if using HTTPS
+    secure: false, // set to true if using HTTPS
     httpOnly: true,
-    sameSite: 'none'
+    sameSite: 'lax'
   }
 }));
 
@@ -133,11 +133,12 @@ app.get('/auth/club/google/callback',
 
 
 // ✅ Auth Session Info
-app.get('/api/auth/me', (req, res) => {
+app.get('/login', (req, res) => {
   console.log("session info:", req.session);
   console.log("Session ID:", req.sessionID);
   console.log("Session cookie:", req.session.cookie);
   console.log("User found in request:", req.user);
+  console.log("Is Authenticated:", req.isAuthenticated());
   if (req.isAuthenticated() && req.user) {
     const user = req.user;
 

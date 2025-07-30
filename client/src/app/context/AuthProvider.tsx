@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true)
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000'
   useEffect(() => {
-    fetch(`${apiBase}/api/auth/me`, {
+    fetch(`${apiBase}/login`, {
       credentials: 'include',
     })
       .then(res => {
