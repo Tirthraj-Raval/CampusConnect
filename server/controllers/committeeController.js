@@ -4,7 +4,7 @@ exports.getCommitteeMembers = async (req, res) => {
   const { clubId } = req.params;
   try {
     const result = await pool.query(
-      "SELECT u.id, u.name, c.role, c.joined_at FROM users u JOIN club_committee_members c ON u.id = c.user_id WHERE c.club_id = $1",
+      "SELECT u.id, u.name, u.profile_pic, c.role, c.joined_at FROM users u JOIN club_committee_members c ON u.id = c.user_id WHERE c.club_id = $1",
       [clubId]
     );
     res.json(result.rows);
@@ -16,6 +16,7 @@ exports.getCommitteeMembers = async (req, res) => {
 exports.addCommitteeMember = async (req, res) => {
   const { clubId } = req.params;
   const { userId, role } = req.body;
+  console.log("Adding committee member:", userId, "with role:", role);
   try {
     await pool.query(
       "INSERT INTO club_committee_members (club_id, user_id, role) VALUES ($1, $2, $3)",

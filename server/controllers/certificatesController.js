@@ -7,7 +7,7 @@ const fs = require('fs');
 exports.getCertificates = async (req, res) => {
   const { clubId } = req.params;
   const q = `
-    SELECT c.id, c.event_id, e.title AS event_name, u.id AS user_id, u.name AS recipient,
+    SELECT c.id, c.event_id, e.title AS event_name, u.id AS user_id, u.name AS recipient, u.email AS user_email,
            c.generated_at, c.certificate_url
     FROM certificates c
     JOIN events e ON e.id = c.event_id
