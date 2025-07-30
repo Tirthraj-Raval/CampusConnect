@@ -130,6 +130,7 @@ exports.getEventCapacities = async (req, res) => {
     SELECT 
       e.id AS "eventId",
       e.title,
+      e.event_date,
       e.max_capacity AS "maxCapacity",
       COUNT(r.id) AS "currentCount"
     FROM events e
