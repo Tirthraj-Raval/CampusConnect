@@ -10,6 +10,7 @@ const pool = new Pool({
   ssl: {
     rejectUnauthorized: false, // for Supabase hosted SSL
   },
+  family: 4, // Force IPv4
 });
 
 module.exports = pool;
