@@ -3,6 +3,7 @@ const passport = require('passport');
 require('../config/clubPassport'); // 🔁 Import club passport config
 
 const router = express.Router();
+const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
 // 🔁 Route to start OAuth login for club
 router.get('/google', passport.authenticate('club-google', {
@@ -12,12 +13,12 @@ router.get('/google', passport.authenticate('club-google', {
 // ✅ Callback route
 router.get('/google/callback',
   passport.authenticate('club-google', {
-    failureRedirect: 'http://localhost:3000/club-login', // custom failure UI
+    failureRedirect: `${appUrl}/club-login`, // custom failure UI
   }),
   (req, res) => {
     // ✅ On success, redirect to that club's dashboard
     const clubId = req.user.id;
-    return res.redirect(`http://localhost:3000/clubs/${clubId}/dashboard`);
+    return res.redirect(`${appUrl}/clubs/${clubId}/dashboard`);
   }
 );
 
@@ -28,7 +29,7 @@ router.get('/logout', (req, res) => {
     req.session.destroy(err => {
       if (err) console.error(err);
       res.clearCookie('connect.sid');
-      res.redirect('http://localhost:3000');
+      res.redirect(`${appUrl}`);
     });
   });
 });

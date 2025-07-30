@@ -26,6 +26,7 @@ const studentAuth = require('../routes/studentAuth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -40,7 +41,7 @@ app.set('socketio', io);
 
 // ✅ Middleware
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: appUrl,
   credentials: true,
 }));
 app.use(express.json());
@@ -106,10 +107,10 @@ app.get('/auth//student/google',
 
 app.get('/auth/student/google/callback',
   passport.authenticate('student-google', {
-    failureRedirect: 'http://localhost:3000/stundent-login'
+    failureRedirect: `${appUrl}/student-login`
   }),
   (req, res) => {
-    res.redirect('http://localhost:3000');
+    res.redirect(`${appUrl}`);
   }
 );
 
@@ -120,10 +121,10 @@ app.get('/auth/club/google',
 
 app.get('/auth/club/google/callback',
   passport.authenticate('club-google', {
-    failureRedirect: 'http://localhost:3000/club-login'
+    failureRedirect: `${appUrl}/club-login`
   }),
   (req, res) => {
-    res.redirect('http://localhost:3000/clubs/dashboard'); // or desired path
+    res.redirect(`${appUrl}/clubs/dashboard`);
   }
 );
 
