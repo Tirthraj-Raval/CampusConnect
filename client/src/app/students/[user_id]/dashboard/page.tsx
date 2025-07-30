@@ -41,14 +41,16 @@ import {
   Menu,
   X,
   ArrowLeft,
+  ChevronDown,
   Info
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Legend, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // Types
 type EventCapacity = {
   eventId: number;
   title: string;
+  event_date: string;
   maxCapacity: number;
   currentCount: number;
 };
@@ -103,7 +105,7 @@ type Event = {
   location?: string;
   event_date?: string;
   club_name?: string;
-  capacity?: number;
+  max_capacity?: number;
   custom_html?: string;
 };
 
@@ -137,6 +139,7 @@ export default function StudentDashboard() {
   const [activityStatus, setActivityStatus] = useState<'Active' | 'Inactive'>('Inactive');
   const [searchQuery, setSearchQuery] = useState('');
   const [eventSearchQuery, setEventSearchQuery] = useState('');
+  const [clubSearchQuery, setClubSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{
     clubs: ClubSearchResult[];
     students: StudentSearchResult[];
@@ -146,6 +149,7 @@ export default function StudentDashboard() {
     students: [],
     events: []
   });
+  const [clubSearchResults, setClubSearchResults] = useState<ClubSearchResult[]>([]);
 
   const [clubs, setClubs] = useState<Club[]>([]);
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
@@ -165,10 +169,19 @@ export default function StudentDashboard() {
   // View states
   const [showEventDetails, setShowEventDetails] = useState(false);
   const [showClubDetails, setShowClubDetails] = useState(false);
+  const [showClubFullPage, setShowClubFullPage] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
-  // Added by me
-  const [open, setOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  //Added by me
+const [eventFilters, setEventFilters] = useState({
+  upcoming: true,
+  past: true,
+  registered: true,
+  available: true,
+  attended: true,
+  missed: true
+});
+const [showFilters, setShowFilters] = useState(false);
 
   // Animation variants
   const containerVariants = {
@@ -230,40 +243,12 @@ export default function StudentDashboard() {
     fetchClubs();
     
     // Show initial floating notifications after data loads
-    setTimeout(() => {
-      showInitialFloatingNotifications();
-    }, 2000);
+    showInitialFloatingNotifications();
   }, []);
 
-  // Added by me
-  // Close dropdown if clicked outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      const res = await fetch('http://localhost:5000/auth/logout', {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (res.ok) {
-        window.location.href = '/student-login'; // redirect to login page after logout
-      } else {
-        alert('Logout failed');
-      }
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
-  };
+    showInitialFloatingNotifications();
+  }, [notifications]);
 
   // Show meaningful floating notifications based on data
   const showInitialFloatingNotifications = () => {
@@ -314,7 +299,7 @@ export default function StudentDashboard() {
         timestamp: new Date().toISOString()
       });
     }
-
+    console.log("New Notifications:", newNotifications);
     setFloatingNotifications(newNotifications);
 
     // Remove them after 5 seconds each
@@ -344,71 +329,76 @@ export default function StudentDashboard() {
   }, []);
 
   // Socket event handlers
-  useEffect(() => {
-    const socket = socketRef.current;
-    if (!socket) return;
+ useEffect(() => {
+  const socket = socketRef.current;
+  if (!socket) return;
 
-    let joinedRooms: string[] = [];
+  let joinedRooms: string[] = [];
 
-    const fetchAndSubscribe = async () => {
-      try {
-        const res = await fetch('http://localhost:5000/api/student/event-capacity', {
-          credentials: 'include',
-        });
-        const data = await res.json();
-        setEvents(data);
-
-        data.forEach((event: EventCapacity) => {
-          const room = `event_${event.eventId}`;
-          socket.emit('join_event_room', room);
-          joinedRooms.push(room);
-        });
-      } catch (err) {
-        console.error('Failed to fetch event capacities:', err);
-      }
-    };
-
-    fetchAndSubscribe();
-
-    const rsvpHandler = (data: { eventId: number; currentCount: number }) => {
-      console.log('📡 RSVP Update Received:', data);
-      setEvents((prev) =>
-        prev.map((ev) =>
-          ev.eventId === data.eventId
-            ? { ...ev, currentCount: data.currentCount }
-            : ev
-        )
-      );
-    };
-
-    const notificationHandler = (notification: any) => {
-      console.log('🔔 New Notification received:', notification);
-      setNotifications(prev => [notification, ...prev]);
-      setFloatingNotifications(prev => [...prev, {
-        ...notification,
-        id: `notif-${Date.now()}`,
-        type: 'notification',
-        emoji: '🔔',
-        timestamp: new Date().toISOString()
-      }]);
-      
-      // Remove floating notification after 5 seconds
-      setTimeout(() => {
-        setFloatingNotifications(prev => prev.filter(n => n.id !== `notif-${notification.id}`));
-      }, 5000);
-    };
-
-    socket.on('rsvp_update', rsvpHandler);
-    socket.on('new_notification', notificationHandler);
-
-    return () => {
-      socket.off('rsvp_update', rsvpHandler);
-      socket.off('new_notification', notificationHandler);
-      joinedRooms.forEach((room) => {
-        socket.emit('leave_event_room', room);
+  const fetchAndSubscribe = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/student/event-capacity', {
+        credentials: 'include',
       });
-    };
-  }, []);
+      const data = await res.json();
+      console.log('Fetched event capacities:', data);
+      setEvents(data);
+
+      data.forEach((event: EventCapacity) => {
+        const room = `event_${event.eventId}`;
+        socket.emit('join_event_room', room);
+        joinedRooms.push(room);
+      });
+    } catch (err) {
+      console.error('Failed to fetch event capacities:', err);
+    }
+  };
+
+  fetchAndSubscribe();
+
+  const rsvpHandler = (data: { eventId: number; currentCount: number }) => {
+    console.log('📡 RSVP Update Received:', data);
+    setEvents((prev) =>
+      prev.map((ev) =>
+        ev.eventId === data.eventId
+          ? { ...ev, currentCount: data.currentCount }
+          : ev
+      )
+    );
+  };
+
+  const notificationHandler = (notification: any) => {
+    console.log('🔔 New Notification received:', notification);
+    setNotifications(prev => [notification, ...prev]);
+    
+    // Create a unique ID for the floating notification
+    const notificationId = `notif-${Date.now()}`;
+    
+    setFloatingNotifications(prev => [...prev, {
+      id: notificationId,
+      message: notification.message,
+      type: 'notification',
+      emoji: '🔔',
+      timestamp: new Date().toISOString()
+    }]);
+    
+    // Remove floating notification after 5 seconds using the correct ID
+    setTimeout(() => {
+      setFloatingNotifications(prev => prev.filter(n => n.id !== notificationId));
+    }, 5000);
+  };
+
+  socket.on('rsvp_update', rsvpHandler);
+  socket.on('new_notification', notificationHandler);
+
+  return () => {
+    socket.off('rsvp_update', rsvpHandler);
+    socket.off('new_notification', notificationHandler);
+    joinedRooms.forEach((room) => {
+      socket.emit('leave_event_room', room);
+    });
+  };
+}, []);
 
   // Search functionality
   const fetchSearchResults = async (query: string) => {
@@ -451,6 +441,26 @@ export default function StudentDashboard() {
     setLoading(false);
   };
 
+  const fetchClubSearchResults = async (query: string) => {
+    if (!query.trim()) {
+      setClubSearchResults([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/club/clubs/search?query=${encodeURIComponent(query.trim())}`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      setClubSearchResults(data);
+    } catch (err) {
+      console.error('Club search error:', err);
+      setClubSearchResults([]);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
       fetchSearchResults(searchQuery);
@@ -466,6 +476,14 @@ export default function StudentDashboard() {
 
     return () => clearTimeout(debounceTimer);
   }, [eventSearchQuery]);
+
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      fetchClubSearchResults(clubSearchQuery);
+    }, 300);
+
+    return () => clearTimeout(debounceTimer);
+  }, [clubSearchQuery]);
 
   // API Functions
   const fetchStudent = async () => {
@@ -633,12 +651,13 @@ export default function StudentDashboard() {
 
   const submitFeedback = async () => {
     try {
+      console.log("Feedback Event Id", selectedEvent?.id);
       const res = await fetch('http://localhost:5000/api/student/feedback', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          event_id: Number(feedbackEventId),
+          event_id: Number(selectedEvent?.id),
           rating: feedbackRating,
           comment: feedbackComment,
         }),
@@ -649,6 +668,8 @@ export default function StudentDashboard() {
         setFeedbackEventId('');
         setFeedbackRating(5);
         setFeedbackComment('');
+        setEventSearchQuery('');
+        setEventSearchResults([]);
       } else {
         showErrorToast(data.error || 'Failed to submit feedback');
       }
@@ -658,9 +679,23 @@ export default function StudentDashboard() {
     }
   };
 
-  const getFeedback = async () => {
+    useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (eventSearchQuery.trim().length > 0) {
+        fetch(`http://localhost:5000/api/club/events/search?query=${encodeURIComponent(eventSearchQuery)}`)
+          .then(res => res.json())
+          .then(data => setEventSearchResults(data))
+          .catch(err => console.error('Search error:', err));
+      } else {
+        setEventSearchResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [eventSearchQuery]);
+
+  const getFeedback = async (eventId: number) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/student/feedback/${getFeedbackEventId}`, {
+      const res = await fetch(`http://localhost:5000/api/student/feedback/${eventId}`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -677,6 +712,7 @@ export default function StudentDashboard() {
         credentials: 'include',
       });
       const data = await res.json();
+      console.log('Certificates fetched:', data);
       setCertificates(data);
     } catch (err) {
       console.error('Failed to fetch certificates:', err);
@@ -811,7 +847,7 @@ export default function StudentDashboard() {
 
   const handleExploreClub = (club: Club) => {
     setSelectedClub(club);
-    setShowClubDetails(true);
+    setShowClubFullPage(true);
   };
 
   // Toast notifications
@@ -878,8 +914,8 @@ export default function StudentDashboard() {
   };
 
   // Helper functions
-  const isEventRSVPed = (eventId: string) => {
-    return rsvps.some(rsvp => rsvp.id.toString() === eventId);
+  const isEventRSVPed = (eventId: string | number) => {
+    return rsvps.some(rsvp => rsvp.id.toString() === eventId.toString());
   };
 
   const isClubSubscribed = (clubId: string) => {
@@ -900,11 +936,29 @@ export default function StudentDashboard() {
 
   // Pagination
   const getCurrentPageEvents = () => {
-    const eventsToShow = eventSearchQuery ? eventSearchResults : allEvents;
-    const startIndex = (currentPage - 1) * eventsPerPage;
-    const endIndex = startIndex + eventsPerPage;
-    return eventsToShow.slice(startIndex, endIndex);
-  };
+  let eventsToShow = eventSearchQuery ? eventSearchResults : allEvents;
+  
+  // Apply filters
+  eventsToShow = eventsToShow.filter(event => {
+    const status = getEventStatus(event);
+    const eventDate = new Date(event.event_date || event.date);
+    const isUpcoming = eventDate > new Date();
+    
+    if (isUpcoming && !eventFilters.upcoming) return false;
+    if (!isUpcoming && !eventFilters.past) return false;
+    
+    if (status === 'registered' && !eventFilters.registered) return false;
+    if (status === 'available' && !eventFilters.available) return false;
+    if (status === 'attended' && !eventFilters.attended) return false;
+    if (status === 'missed' && !eventFilters.missed) return false;
+    
+    return true;
+  });
+
+  const startIndex = (currentPage - 1) * eventsPerPage;
+  const endIndex = startIndex + eventsPerPage;
+  return eventsToShow.slice(startIndex, endIndex);
+};
 
   const getTotalPages = () => {
     const eventsToShow = eventSearchQuery ? eventSearchResults : allEvents;
@@ -1051,7 +1105,12 @@ export default function StudentDashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {events.map((event) => {
+            {events
+            .filter(event => {
+                const eventDate = new Date(event.event_date);
+                return eventDate > new Date(); // Only upcoming events
+              })
+            .map((event) => {
               const availableSeats = event.maxCapacity - event.currentCount;
               const occupancyPercentage = (event.currentCount / event.maxCapacity) * 100;
               
@@ -1122,7 +1181,12 @@ export default function StudentDashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {subscribedEvents.slice(0, 6).map((event, index) => (
+            {subscribedEvents
+            .filter(event => {
+                const eventDate = new Date(event.event_date);
+                return eventDate > new Date();
+              })
+            .slice(0, 6).map((event, index) => (
               <motion.div
                 key={event.id}
                 variants={cardVariants}
@@ -1155,7 +1219,7 @@ export default function StudentDashboard() {
                     <span className="truncate">{event.location}</span>
                   </div>
                   <motion.button 
-                    className="text-sm bg-gradient-to-r from-emerald-500 to-sky-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
+                    className="text-sm bg-gradient-to-r cursor-pointer from-emerald-500 to-sky-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -1166,6 +1230,141 @@ export default function StudentDashboard() {
             ))}
           </div>
         )}
+      </motion.div>
+      {/* Engagement Analytics Section */}
+      <motion.div variants={itemVariants} className="bg-white rounded-3xl p-8 shadow-2xl border border-gray-100">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+          <Activity className="w-8 h-8 text-indigo-500 mr-3" />
+          Your Engagement Analytics
+        </h2>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Comparison Bar Chart */}
+          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-200">
+            <h3 className="text-lg font-semibold text-indigo-700 mb-4 flex items-center">
+              <BarChart3 className="w-5 h-5 mr-2" />
+              Your Engagement Across Categories
+            </h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    { name: 'RSVPs', value: rsvps.length, fill: '#6366f1' },
+                    { name: 'Subscriptions', value: subscriptions.length, fill: '#8b5cf6' },
+                    { name: 'Certificates', value: certificates.length, fill: '#a855f7' }
+                  ]}
+                  margin={{ top: 20, right: 20, left: 0, bottom: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#c7d2fe" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fill: '#4f46e5' }} 
+                    axisLine={{ stroke: '#a5b4fc' }}
+                  />
+                  <YAxis 
+                    tick={{ fill: '#4f46e5' }} 
+                    axisLine={{ stroke: '#a5b4fc' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{
+                      background: 'rgba(255, 255, 255, 0.96)',
+                      borderColor: '#a5b4fc',
+                      borderRadius: '0.5rem',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
+                  <Bar 
+                    dataKey="value" 
+                    radius={[4, 4, 0, 0]}
+                    animationDuration={1500}
+                  >
+                    {[
+                      { name: 'RSVPs', value: rsvps.length, fill: '#6366f1' },
+                      { name: 'Subscriptions', value: subscriptions.length, fill: '#8b5cf6' },
+                      { name: 'Certificates', value: certificates.length, fill: '#a855f7' }
+                    ].map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.fill} 
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-sm text-indigo-600 mt-2 text-center">
+              Track your campus involvement across different activities
+            </p>
+          </div>
+
+          {/* Pie Chart */}
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-200">
+            <h3 className="text-lg font-semibold text-emerald-700 mb-4 flex items-center">
+              <PieChartIcon className="w-5 h-5 mr-2" />
+              Event Participation Status
+            </h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={[
+                      { 
+                        name: 'Upcoming', 
+                        value: rsvps.filter(r => new Date(r.event_date) > new Date()).length, 
+                        color: '#10b981' 
+                      },
+                      { 
+                        name: 'Completed', 
+                        value: rsvps.filter(r => new Date(r.event_date) <= new Date()).length, 
+                        color: '#3b82f6' 
+                      }
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                    label={({ name, percent = 0 }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    {[
+                      { name: 'Upcoming', value: rsvps.filter(r => new Date(r.event_date) > new Date()).length, color: '#10b981' },
+                      { name: 'Completed', value: rsvps.filter(r => new Date(r.event_date) <= new Date()).length, color: '#3b82f6' }
+                    ].map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.color} 
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value: number, name: string) => [`${value} events`, name]}
+                    contentStyle={{
+                      background: 'rgba(255, 255, 255, 0.96)',
+                      borderColor: '#a5b4fc',
+                      borderRadius: '0.5rem',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
+                  <Legend 
+                    formatter={(value: string) => (
+                      <span className="text-sm text-gray-700">
+                        {value === 'Upcoming' ? '🔵 Upcoming' : '🟢 Completed'}
+                      </span>
+                    )}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-sm text-emerald-600 mt-2 text-center">
+              {rsvps.length > 0 
+                ? `You've completed ${rsvps.filter(r => new Date(r.event_date) <= new Date()).length} events`
+                : 'No events attended yet'}
+            </p>
+          </div>
+        </div>
+
       </motion.div>
     </motion.div>
   );
@@ -1268,262 +1467,435 @@ export default function StudentDashboard() {
   );
 
   const renderEvents = () => (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="space-y-8"
-    >
-      <motion.div variants={itemVariants} className="bg-white rounded-3xl p-8 shadow-2xl border border-gray-100">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-            <Calendar className="w-8 h-8 text-orange-500 mr-3" />
-            All Events
-          </h2>
-          
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                value={eventSearchQuery}
-                onChange={(e) => setEventSearchQuery(e.target.value)}
-                placeholder="Search events..."
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-300"
-              />
-            </div>
+  <motion.div
+    variants={containerVariants}
+    initial="hidden"
+    animate="visible"
+    className="space-y-8"
+  >
+    <motion.div variants={itemVariants} className="bg-white rounded-3xl p-8 shadow-2xl border border-gray-100">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+          <Calendar className="w-8 h-8 text-orange-500 mr-3" />
+          All Events
+        </h2>
+
+        <div className="flex items-center space-x-4">
+          <div className="relative">
+            <motion.button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-xl font-bold shadow-md hover:shadow-lg transition-all duration-300"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Filter className="w-5 h-5 text-white" />
+              <span className="text-sm font-medium">Filters</span>
+            </motion.button>
+
+            {showFilters && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute left-0 mt-2 w-64 bg-white rounded-lg p-4 border border-gray-300 shadow-lg z-50"
+              >
+                <div className="space-y-3">
+                  {[
+                    { label: 'Upcoming', key: 'upcoming' },
+                    { label: 'Past', key: 'past' },
+                    { label: 'Registered', key: 'registered' },
+                    { label: 'Available', key: 'available' },
+                    { label: 'Attended', key: 'attended' },
+                    { label: 'Missed', key: 'missed' }
+                  ].map(filter => (
+                    <div
+                      key={filter.key}
+                      className="flex items-center justify-between px-3 py-2 rounded-md cursor-pointer hover:bg-gray-100 transition-all"
+                      onClick={() => setEventFilters(prev => ({
+                        ...prev,
+                        [filter.key as keyof typeof eventFilters]: !prev[filter.key as keyof typeof eventFilters]
+                      }))}
+                    >
+                      <span className="text-sm font-medium text-gray-700">{filter.label}</span>
+                      <div
+                        className={`w-5 h-5 rounded-full border ${
+                          eventFilters[filter.key as keyof typeof eventFilters]
+                            ? 'bg-blue-500 border-blue-500'
+                            : 'bg-transparent border-gray-400'
+                        }`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              value={eventSearchQuery}
+              onChange={(e) => setEventSearchQuery(e.target.value)}
+              placeholder="Search events..."
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-300"
+            />
           </div>
         </div>
-        
-        {getCurrentPageEvents().length === 0 ? (
-          <div className="text-center py-12">
-            <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No events found</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {getCurrentPageEvents().map((event, index) => {
-                const status = getEventStatus(event);
-                const statusConfig = {
-                  registered: { 
-                    bg: 'bg-green-50 border-green-200', 
-                    text: 'text-green-700', 
-                    badge: 'bg-green-100 text-green-700', 
-                    label: 'Registered' 
-                  },
-                  available: { 
-                    bg: 'bg-blue-50 border-blue-200', 
-                    text: 'text-blue-700', 
-                    badge: 'bg-blue-100 text-blue-700', 
-                    label: 'Available' 
-                  },
-                  attended: { 
-                    bg: 'bg-emerald-50 border-emerald-200', 
-                    text: 'text-emerald-700', 
-                    badge: 'bg-emerald-100 text-emerald-700', 
-                    label: 'Attended' 
-                  },
-                  missed: { 
-                    bg: 'bg-gray-50 border-gray-200', 
-                    text: 'text-gray-700', 
-                    badge: 'bg-gray-100 text-gray-700', 
-                    label: 'Missed' 
-                  }
-                };
-                
-                const config = statusConfig[status as keyof typeof statusConfig];
-                
-                return (
-                  <motion.div
-                    key={event.id}
-                    variants={cardVariants}
-                    whileHover="hover"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: index * 0.1 }}
-                    className={`${config.bg} rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border cursor-pointer`}
-                    onClick={() => fetchEventDetails(event.id)}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <motion.div 
-                        className="w-14 h-14 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg"
-                        whileHover={{ rotate: [0, -10, 10, 0] }}
-                        transition={{ duration: 0.5 }}
-                      >
-                        📅
-                      </motion.div>
-                      <span className={`text-xs font-bold px-3 py-1 rounded-full ${config.badge}`}>
-                        {config.label}
-                      </span>
+      </div>
+
+      {getCurrentPageEvents().length === 0 ? (
+        <div className="text-center py-12">
+          <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500 text-lg">No events found</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {getCurrentPageEvents().map((event, index) => {
+              const status = getEventStatus(event);
+              const statusConfig = {
+                registered: { 
+                  bg: 'bg-green-50 border-green-200', 
+                  text: 'text-green-700', 
+                  badge: 'bg-green-100 text-green-700', 
+                  label: 'Registered' 
+                },
+                available: { 
+                  bg: 'bg-blue-50 border-blue-200', 
+                  text: 'text-blue-700', 
+                  badge: 'bg-blue-100 text-blue-700', 
+                  label: 'Available' 
+                },
+                attended: { 
+                  bg: 'bg-emerald-50 border-emerald-200', 
+                  text: 'text-emerald-700', 
+                  badge: 'bg-emerald-100 text-emerald-700', 
+                  label: 'Attended' 
+                },
+                missed: { 
+                  bg: 'bg-gray-50 border-gray-200', 
+                  text: 'text-gray-700', 
+                  badge: 'bg-gray-100 text-gray-700', 
+                  label: 'Missed' 
+                }
+              };
+
+              const config = statusConfig[status as keyof typeof statusConfig];
+
+              return (
+                <motion.div
+                  key={event.id}
+                  variants={cardVariants}
+                  whileHover="hover"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: index * 0.1 }}
+                  className={`${config.bg} rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border cursor-pointer`}
+                  onClick={() => fetchEventDetails(event.id)}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <motion.div 
+                      className="w-14 h-14 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg"
+                      whileHover={{ rotate: [0, -10, 10, 0] }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      📅
+                    </motion.div>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${config.badge}`}>
+                      {config.label}
+                    </span>
+                  </div>
+
+                  <h3 className={`font-bold mb-2 text-lg ${config.text}`}>{event.title}</h3>
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">{event.description}</p>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center text-sm text-gray-500">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      <span>{new Date(event.event_date || event.date).toLocaleDateString()}</span>
                     </div>
-                    
-                    <h3 className={`font-bold mb-2 text-lg ${config.text}`}>{event.title}</h3>
-                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">{event.description}</p>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center text-sm text-gray-500">
-                        <Calendar className="w-4 h-4 mr-2" />
-                        <span>{new Date(event.event_date || event.date).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex items-center text-sm text-gray-500">
-                        <MapPin className="w-4 h-4 mr-2" />
-                        <span className="truncate">{event.location}</span>
-                      </div>
-                      <div className="flex items-center text-sm text-gray-500">
-                        <Users className="w-4 h-4 mr-2" />
-                        <span>{event.club_name}</span>
-                      </div>
+                    <div className="flex items-center text-sm text-gray-500">
+                      <MapPin className="w-4 h-4 mr-2" />
+                      <span className="truncate">{event.location}</span>
                     </div>
-                    
-                    <div className="mt-4 flex justify-between items-center">
+                    <div className="flex items-center text-sm text-gray-500">
+                      <Users className="w-4 h-4 mr-2" />
+                      <span>{event.club_name}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex justify-between items-center">
+                    <motion.button 
+                      className="text-sm bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fetchEventDetails(event.id);
+                      }}
+                    >
+                      View Details
+                    </motion.button>
+
+                    {status === 'available' && (
                       <motion.button 
-                        className="text-sm bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
+                        className="text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          fetchEventDetails(event.id);
+                          rsvpEvent(event.id);
                         }}
                       >
-                        View Details
+                        RSVP
                       </motion.button>
-                      
-                      {status === 'available' && (
-                        <motion.button 
-                          className="text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            rsvpEvent(event.id);
-                          }}
-                        >
-                          RSVP
-                        </motion.button>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-            
-            {/* Pagination */}
-            {getTotalPages() > 1 && (
-              <div className="flex justify-center items-center space-x-4">
-                <motion.button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                  whileHover={{ scale: currentPage === 1 ? 1 : 1.05 }}
-                  whileTap={{ scale: currentPage === 1 ? 1 : 0.95 }}
-                >
-                  Previous
-                </motion.button>
-                
-                <span className="text-gray-600 font-medium">
-                  Page {currentPage} of {getTotalPages()}
-                </span>
-                
-                <motion.button
-                  onClick={() => setCurrentPage(prev => Math.min(getTotalPages(), prev + 1))}
-                  disabled={currentPage === getTotalPages()}
-                  className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                  whileHover={{ scale: currentPage === getTotalPages() ? 1 : 1.05 }}
-                  whileTap={{ scale: currentPage === getTotalPages() ? 1 : 0.95 }}
-                >
-                  Next
-                </motion.button>
-              </div>
-            )}
-          </>
-        )}
-      </motion.div>
-    </motion.div>
-  );
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
 
-  const renderClubs = () => (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="space-y-8"
-    >
-      <motion.div variants={itemVariants} className="bg-white rounded-3xl p-8 shadow-2xl border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-          <Users className="w-8 h-8 text-blue-500 mr-3" />
-          Clubs & Communities
-        </h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {clubs.map((club, index) => {
-            const isSubscribed = isClubSubscribed(club.id);
-            
-            return (
-              <motion.div
-                key={club.id}
-                variants={cardVariants}
-                whileHover="hover"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className={`${isSubscribed ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'} rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border`}
+          {/* Pagination */}
+          {getTotalPages() > 1 && (
+            <div className="flex justify-center items-center space-x-4">
+              <motion.button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={{ scale: currentPage === 1 ? 1 : 1.05 }}
+                whileTap={{ scale: currentPage === 1 ? 1 : 0.95 }}
               >
-                <div className="flex items-start justify-between mb-4">
+                Previous
+              </motion.button>
+
+              <span className="text-gray-600 font-medium">
+                Page {currentPage} of {getTotalPages()}
+              </span>
+
+              <motion.button
+                onClick={() => setCurrentPage(prev => Math.min(getTotalPages(), prev + 1))}
+                disabled={currentPage === getTotalPages()}
+                className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={{ scale: currentPage === getTotalPages() ? 1 : 1.05 }}
+                whileTap={{ scale: currentPage === getTotalPages() ? 1 : 0.95 }}
+              >
+                Next
+              </motion.button>
+            </div>
+          )}
+        </>
+      )}
+    </motion.div>
+  </motion.div>
+);
+
+
+  const renderClubs = () => {
+    if (showClubFullPage && selectedClub) {
+      return (
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="space-y-8"
+        >
+          <motion.div variants={itemVariants} className="bg-white rounded-3xl p-8 shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <motion.button
+                onClick={() => setShowClubFullPage(false)}
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"
+                whileHover={{ x: -4 }}
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span className="font-semibold">Back to Clubs</span>
+              </motion.button>
+            </div>
+
+            {/* Club Header */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="flex items-start space-x-6">
                   <motion.img 
-                    src={club.logo_url || '/placeholder.svg'} 
-                    alt={club.name} 
-                    className="w-16 h-16 object-contain rounded-xl shadow-md"
-                    whileHover={{ scale: 1.1 }}
+                    src={selectedClub.logo_url || '/placeholder.svg'} 
+                    alt={selectedClub.name} 
+                    className="w-32 h-32 object-contain rounded-2xl shadow-lg border border-gray-200"
+                    whileHover={{ scale: 1.05 }}
                     transition={{ duration: 0.3 }}
                   />
-                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                    isSubscribed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {isSubscribed ? 'Subscribed' : 'Available'}
-                  </span>
+                  <div className="flex-1">
+                    <h1 className="text-4xl font-bold text-gray-800 mb-3">{selectedClub.name}</h1>
+                    <p className="text-lg text-gray-600 mb-4">{selectedClub.description}</p>
+                    
+                    <div className="flex items-center space-x-4">
+                      <span className={`px-4 py-2 rounded-full text-sm font-semibold ${
+                        isClubSubscribed(selectedClub.id) ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {isClubSubscribed(selectedClub.id) ? '✓ Subscribed' : 'Not Subscribed'}
+                      </span>
+                      <div className="flex items-center text-sm text-gray-500">
+                        <Users className="w-4 h-4 mr-1" />
+                        <span>{subscriptions.filter(s => s.id === selectedClub.id).length} members</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                
-                <h3 className="font-bold text-gray-800 mb-2 text-lg">{club.name}</h3>
-                <p className="text-sm text-gray-600 mb-4 line-clamp-3">{club.description}</p>
-                
-                <div className="flex justify-between items-center">
-                  <motion.button 
-                    onClick={() => handleExploreClub(club)}
-                    className="text-sm bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+              </div>
+              
+              <div className="space-y-4">
+                {isClubSubscribed(selectedClub.id) ? (
+                  <motion.button
+                    onClick={() => unsubscribeClub(selectedClub.id)}
+                    className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                   >
-                    Explore
+                    Unsubscribe from Club
                   </motion.button>
+                ) : (
+                  <motion.button
+                    onClick={() => subscribeClub(selectedClub.id)}
+                    className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Subscribe to Club
+                  </motion.button>
+                )}
+                
+                <motion.button
+                  onClick={() => setActiveSection('events')}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  View All Events
+                </motion.button>
+              </div>
+            </div>
+
+            {/* Club Details */}
+            {selectedClub.about_html && (
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">About This Club</h3>
+                <div 
+                  className="prose max-w-none text-gray-700"
+                  dangerouslySetInnerHTML={{ __html: selectedClub.about_html }}
+                />
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      );
+    }
+
+    return (
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="space-y-8"
+      >
+        <motion.div variants={itemVariants} className="bg-white rounded-3xl p-8 shadow-2xl border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+              <Users className="w-8 h-8 text-blue-500 mr-3" />
+              Clubs & Communities
+            </h2>
+            
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  value={clubSearchQuery}
+                  onChange={(e) => setClubSearchQuery(e.target.value)}
+                  placeholder="Search clubs..."
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Show search results if searching, otherwise show all clubs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {(clubSearchQuery ? clubSearchResults : clubs).map((club, index) => {
+              const isSubscribed = isClubSubscribed(club.id);
+              
+              return (
+                <motion.div
+                  key={club.id}
+                  variants={cardVariants}
+                  whileHover="hover"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: index * 0.1 }}
+                  className={`${isSubscribed ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'} rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border`}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <motion.img 
+                      src={club.logo_url || '/placeholder.svg'} 
+                      alt={club.name} 
+                      className="w-16 h-16 object-contain rounded-xl shadow-md"
+                      whileHover={{ scale: 1.1 }}
+                      transition={{ duration: 0.3 }}
+                    />
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                      isSubscribed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {isSubscribed ? 'Subscribed' : 'Available'}
+                    </span>
+                  </div>
                   
-                  {isSubscribed ? (
+                  <h3 className="font-bold text-gray-800 mb-2 text-lg">{club.name}</h3>
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-3">{club.description}</p>
+                  
+                  <div className="flex justify-between items-center">
                     <motion.button 
-                      onClick={() => unsubscribeClub(club.id)}
-                      className="text-sm bg-gradient-to-r from-red-500 to-red-600 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
+                      onClick={() => handleExploreClub(club)}
+                      className="text-sm bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      Unsubscribe
+                      Explore
                     </motion.button>
-                  ) : (
-                    <motion.button 
-                      onClick={() => subscribeClub(club.id)}
-                      className="text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      Subscribe
-                    </motion.button>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+                    
+                    {isSubscribed ? (
+                      <motion.button 
+                        onClick={() => unsubscribeClub(club.id)}
+                        className="text-sm bg-gradient-to-r from-red-500 to-red-600 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        Unsubscribe
+                      </motion.button>
+                    ) : (
+                      <motion.button 
+                        onClick={() => subscribeClub(club.id)}
+                        className="text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-full font-bold shadow-md hover:shadow-lg transition-all duration-300"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        Subscribe
+                      </motion.button>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+          
+          {clubSearchQuery && clubSearchResults.length === 0 && (
+            <div className="text-center py-12">
+              <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No clubs found for "{clubSearchQuery}"</p>
+            </div>
+          )}
+        </motion.div>
       </motion.div>
-    </motion.div>
-  );
+    );
+  };
 
   const renderRSVPs = () => (
     <motion.div
@@ -1634,80 +2006,127 @@ export default function StudentDashboard() {
         )}
         
         {/* Feedback Section */}
-        <motion.div variants={itemVariants} className="mt-8 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
-          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-            <MessageSquare className="w-6 h-6 text-purple-500 mr-2" />
-            Event Feedback
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h4 className="font-semibold text-gray-700">Submit Feedback</h4>
-              <input 
-                value={feedbackEventId} 
-                onChange={(e) => setFeedbackEventId(e.target.value)} 
-                placeholder="Event ID" 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              />
-              <input 
-                type="number" 
-                value={feedbackRating} 
-                onChange={(e) => setFeedbackRating(Number(e.target.value))} 
-                min={1} 
-                max={5} 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                placeholder="Rating (1-5)"
-              />
-              <textarea 
-                value={feedbackComment} 
-                onChange={(e) => setFeedbackComment(e.target.value)} 
-                placeholder="Your feedback..." 
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              />
-              <motion.button 
-                onClick={submitFeedback} 
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Submit Feedback
-              </motion.button>
-            </div>
-            
-            <div className="space-y-4">
-              <h4 className="font-semibold text-gray-700">View Feedback</h4>
-              <input 
-                value={getFeedbackEventId} 
-                onChange={(e) => setGetFeedbackEventId(e.target.value)} 
-                placeholder="Event ID to view feedback" 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              />
-              <motion.button 
-                onClick={getFeedback} 
-                className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Get Feedback
-              </motion.button>
-              {feedback && (
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <div className="flex items-center mb-2">
+        <motion.div className="mt-8 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
+      <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+        <MessageSquare className="w-6 h-6 text-purple-500 mr-2" />
+        Event Feedback
+      </h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Submit Feedback Section */}
+        <div className="space-y-4">
+          <h4 className="font-semibold text-gray-700">Submit Feedback</h4>
+
+          {/* Autocomplete Search Input */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search Event by Title"
+              value={eventSearchQuery}
+              onChange={(e) => {
+                setEventSearchQuery(e.target.value)
+                setSelectedEvent(null)
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            />
+            {eventSearchResults.length > 0 && !selectedEvent && (
+              <ul className="absolute z-10 bg-white border rounded-lg shadow-md mt-1 w-full max-h-48 overflow-y-auto">
+                {eventSearchResults.map((event) => (
+                  <li
+                    key={event.id}
+                    onClick={() => {
+                      setSelectedEvent(event);
+                      setSearchQuery(event.title);
+                      setEventSearchResults([]);
+                    }}
+                    className="px-4 py-2 cursor-pointer hover:bg-purple-100"
+                  >
+                    {event.title}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {selectedEvent && (
+            <p className="text-sm text-purple-600">Selected Event: {selectedEvent.title}</p>
+          )}
+
+          <input
+            type="number"
+            value={feedbackRating}
+            onChange={(e) => setFeedbackRating(Number(e.target.value))}
+            min={1}
+            max={5}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            placeholder="Rating (1-5)"
+          />
+
+          <textarea
+            value={feedbackComment}
+            onChange={(e) => setFeedbackComment(e.target.value)}
+            placeholder="Your feedback..."
+            rows={3}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+          />
+
+          <motion.button
+            onClick={submitFeedback}
+            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            Submit Feedback
+          </motion.button>
+        </div>
+
+        {/* Get Feedback Section */}
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-700">View Your Feedback</h4>
+            <select
+              value={getFeedbackEventId}
+              onChange={(e) => {
+                setGetFeedbackEventId(e.target.value);
+                if (e.target.value) {
+                  getFeedback(parseInt(e.target.value));
+                }
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            >
+              <option value="">Select an event</option>
+              {rsvps
+                .filter(rsvp => new Date(rsvp.event_date) <= new Date())
+                .map(rsvp => (
+                  <option key={rsvp.id} value={rsvp.id}>
+                    {rsvp.title} - {new Date(rsvp.event_date).toLocaleDateString()}
+                  </option>
+                ))}
+            </select>
+
+            {feedback && (
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <h5 className="font-semibold text-gray-800 mb-2">Your Feedback</h5>
+                <div className="flex items-center mb-2">
+                  <div className="flex">
                     {[...Array(5)].map((_, i) => (
-                      <Star 
-                        key={i} 
-                        className={`w-5 h-5 ${i < feedback.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} 
+                      <Star
+                        key={i}
+                        className={`w-5 h-5 ${i < feedback.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}`}
                       />
                     ))}
-                    <span className="ml-2 text-sm text-gray-600">({feedback.rating}/5)</span>
                   </div>
-                  <p className="text-gray-700">{feedback.comment}</p>
+                  <span className="ml-2 text-sm text-gray-600">{feedback.rating}/5</span>
                 </div>
-              )}
-            </div>
+                <p className="text-gray-700">{feedback.comment}</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Submitted on: {new Date(feedback.submitted_at).toLocaleString()}
+                </p>
+              </div>
+            )}
           </div>
-        </motion.div>
+
+      </div>
+    </motion.div>
       </motion.div>
     </motion.div>
   );
@@ -1756,8 +2175,10 @@ export default function StudentDashboard() {
                   </span>
                 </div>
                 
-                <h3 className="font-bold text-gray-800 mb-2 text-lg">{cert.title}</h3>
-                <p className="text-sm text-gray-600 mb-4">Event ID: {cert.event_id}</p>
+                <h3 className="font-bold text-gray-800 mb-2 text-lg">{cert.event_title}</h3>
+                <p className="text-sm text-gray-600 mb-4">Club Name: {cert.club_name}</p>
+                <p className="text-sm text-gray-500 mb-4">Issued on: {new Date(cert.generated_at).toLocaleDateString()}</p>
+                <p className="text-sm text-gray-500 mb-4">University: {cert.university_name}</p>
                 
                 <motion.a 
                   href={cert.certificate_url} 
@@ -1887,7 +2308,7 @@ export default function StudentDashboard() {
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
-                    label={({ name, value = 0 }) => value > 0 ? `${name}: ${value}` : ''}
+                    label={({ name, value }) => (value ?? 0) > 0 ? `${name}: ${value ?? 0}` : ''}
                   >
                     {[
                       { name: 'Events Attended', value: rsvps.filter(r => new Date(r.event_date) <= new Date()).length, color: '#10b981' },
@@ -2125,6 +2546,7 @@ export default function StudentDashboard() {
                   {searchResults.clubs.map((club, index) => (
                     <motion.div
                       key={club.id}
+                      onClick={() => setActiveSection('clubs')}
                       variants={itemVariants}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -2279,8 +2701,8 @@ export default function StudentDashboard() {
                     <p className="text-gray-600">{selectedEvent.location}</p>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-gray-700 mb-1">Capacity</h4>
-                    <p className="text-gray-600">{selectedEvent.capacity}</p>
+                    <h4 className="font-semibold text-gray-700 mb-1">Max Capacity</h4>
+                    <p className="text-gray-600">{selectedEvent.max_capacity}</p>
                   </div>
                 </div>
                 
@@ -2300,14 +2722,25 @@ export default function StudentDashboard() {
               </div>
               
               <div className="space-y-4">
-                <motion.button
-                  onClick={() => rsvpEvent(selectedEvent.id)}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-sky-500 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  RSVP to Event
-                </motion.button>
+                {isEventRSVPed(selectedEvent.id) ? (
+                  <motion.button
+                    onClick={() => cancelRsvp(parseInt(selectedEvent.id))}
+                    className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Cancel RSVP
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    onClick={() => rsvpEvent(selectedEvent.id)}
+                    className="w-full bg-gradient-to-r from-emerald-500 to-sky-500 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    RSVP to Event
+                  </motion.button>
+                )}
                 
                 <motion.button
                   onClick={() => {
@@ -2603,37 +3036,57 @@ export default function StudentDashboard() {
                 <span className="text-sm font-medium">{activityStatus}</span>
               </div>
               
-              <motion.div
-              className="relative inline-block text-left"
-              whileHover={{ scale: 1.05 }}
-              ref={dropdownRef}
-            >
-              <div
-                className="flex items-center space-x-2 cursor-pointer"
-                onClick={() => setOpen((prev) => !prev)}
-              >
-                <img
-                  src={student?.profile_pic}
-                  alt="Profile"
+                <div className="relative">
+                <motion.div 
+                  className="flex items-center space-x-2 cursor-pointer"
+                  whileHover={{ scale: 1.05 }}
+                  onClick={() => setLogoutOpen(!logoutOpen)}
+                >
+                  <img 
+                  src={student?.profile_pic || '/placeholder.svg'} 
+                  alt="Profile" 
                   className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
-                />
-                <div className="hidden md:block">
-                  <p className="text-sm font-semibold text-gray-800">{student?.name || 'Student'}</p>
+                  />
+                  <div className="hidden md:block">
+                    <p className="text-sm font-semibold text-gray-800 flex items-center">
+                    {student?.name || 'Student'} 
+                    <ChevronDown className="w-5 h-5 ml-1 text-gray-600" />
+                    </p>
                   <p className="text-xs text-gray-600">{student?.email}</p>
-                </div>
-              </div>
-
-              {open && (
-                <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50">
-                  <button
-                    onClick={handleLogout}
-                    className="w-full px-4 py-2 text-sm text-left text-red-600 hover:bg-red-50 hover:text-red-700"
+                  </div>
+                </motion.div>
+                {logoutOpen && (
+                  <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
                   >
-                    🚪 Logout
-                  </button>
+                    <motion.button
+                    onClick={() => {
+                      fetch('http://localhost:5000/auth/logout', {
+                      method: 'GET',
+                      credentials: 'include',
+                      })
+                      .then(() => {
+                        setLogoutOpen(false);
+                        window.location.href = "http://localhost:3000";
+                        showSuccessToast('Logged out successfully!');
+                      })
+                      .catch((err) => {
+                        console.error('Logout failed:', err);
+                        showErrorToast('Failed to logout');
+                      });
+                    }}
+                    className="w-full px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 rounded-lg shadow-md transition-all duration-300"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    >
+                    Logout 
+                    </motion.button>
+                  </motion.div>
+                )}
                 </div>
-              )}
-            </motion.div>
             </div>
           </div>
         </motion.header>
@@ -2644,16 +3097,16 @@ export default function StudentDashboard() {
         </main>
       </div>
 
-      {/* Floating Notifications */}
+      {/* Enhanced Floating Notifications */}
       <AnimatePresence>
         {floatingNotifications.map((notification, index) => (
           <motion.div
             key={notification.id}
-            initial={{ opacity: 0, x: 400, scale: 0.8 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 400, scale: 0.8 }}
-            transition={{ duration: 0.4, delay: index * 0.1 }}
-            className="fixed top-6 right-6 bg-gradient-to-r from-emerald-500 to-sky-500 text-white px-6 py-4 rounded-2xl shadow-xl flex items-center space-x-3 z-50 max-w-sm"
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 100 }}
+            transition={{ duration: 0.6, delay: index * 0.2 }}
+            className="fixed top-6 right-6 bg-gradient-to-r from-emerald-500 to-sky-500 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center space-x-3 z-50 max-w-sm"
             style={{ top: `${24 + index * 80}px` }}
           >
             <motion.div 
@@ -2663,13 +3116,10 @@ export default function StudentDashboard() {
             />
             <span className="text-sm font-bold flex-1">{notification.message}</span>
             <motion.div
-              animate={{ 
-                y: [0, -3, 0],
-                rotate: [0, 10, -10, 0]
-              }}
+              animate={{ y: [0, -3, 0] }}
               transition={{ duration: 1, repeat: Infinity }}
             >
-              {notification.emoji}
+              {notification.emoji || '✨'}
             </motion.div>
             <motion.button
               onClick={() => setFloatingNotifications(prev => prev.filter(n => n.id !== notification.id))}
@@ -2683,24 +3133,22 @@ export default function StudentDashboard() {
         ))}
       </AnimatePresence>
 
-      {/* Additional floating notification like preview */}
+      {/* Additional floating notification */}
       <AnimatePresence>
         {floatingNotifications.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, x: -400 }}
+            initial={{ opacity: 0, x: -100 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -400 }}
-            transition={{ duration: 0.6, delay: 1 }}
-            className="fixed bottom-6 left-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-4 rounded-2xl shadow-xl flex items-center space-x-3 z-50"
+            exit={{ opacity: 0, x: -100 }}
+            transition={{ duration: 0.6, delay: 2 }}
+            className="fixed bottom-6 left-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center space-x-3 z-50 max-w-sm"
           >
             <motion.div 
               className="w-3 h-3 bg-white rounded-full"
               animate={{ scale: [1, 1.3, 1] }}
               transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
             />
-            <span className="text-sm font-bold">
-              {subscriptions.length} club{subscriptions.length !== 1 ? 's' : ''} subscribed!
-            </span>
+            <span className="text-sm font-bold">5 friends joined!</span>
             <motion.div
               animate={{ rotate: [0, 360] }}
               transition={{ duration: 2, repeat: Infinity }}
