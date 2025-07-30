@@ -22,7 +22,8 @@ export default function ClubsUploadPage() {
     formData.append('csv', csv);
 
     try {
-      const res = await fetch(`http://localhost:5000/api/university/${universityId}/upload-clubs`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/university/${universityId}/upload-clubs`, {
         method: 'POST',
         body: formData,
         credentials: 'include',

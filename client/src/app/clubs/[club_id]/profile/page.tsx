@@ -10,7 +10,8 @@ const EditClubProfile = () => {
 
   useEffect(() => {
     const fetchClub = async () => {
-      const res = await fetch(`http://localhost:5000/api/club/${params.club_id}`);
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/${params.club_id}`);
       const data = await res.json();
       setClub(data);
       setLoading(false);
@@ -20,7 +21,8 @@ const EditClubProfile = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch(`http://localhost:5000/api/club/${params.club_id}`, {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+    const res = await fetch(`${apiBase}/api/club/${params.club_id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(club),

@@ -41,8 +41,9 @@ const ClubEvents = () => {
 
   const handleDelete = async (eventId: string) => {
     try {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
       const res = await fetch(
-        `http://localhost:5000/api/club/${params.club_id}/events/${eventId}`,
+        `${apiBase}/api/club/${params.club_id}/events/${eventId}`,
         {
           method: 'DELETE',
           credentials: 'include',

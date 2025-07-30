@@ -29,25 +29,27 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/auth/me', {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+    fetch(`${apiBase}/api/auth/me`, {
       credentials: 'include',
     })
       .then(res => {
-        if (!res.ok) throw new Error('Not logged in')
-        return res.json()
+      if (!res.ok) throw new Error('Not logged in');
+      return res.json();
       })
       .then(data => {
-        setUser(data.user)
-        setUserType(data.type)
+      setUser(data.user);
+      setUserType(data.type);
       })
       .catch(() => {
-        setUser(null)
-        setUserType(null)
-      })
+      setUser(null);
+      setUserType(null);
+      });
   }, [])
 
   const logout = async () => {
-    await fetch('http://localhost:5000/auth/logout', {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+    await fetch(`${apiBase}/auth/logout`, {
       credentials: 'include',
     })
     window.location.reload()
@@ -55,11 +57,13 @@ export default function HomePage() {
 
   const handleGoogleLogin = async () => {
     if (user) {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
       setUser(null)
-      await fetch('http://localhost:5000/auth/logout', { credentials: 'include' })
+      await fetch(`${apiBase}/auth/logout`, { credentials: 'include' })
       window.location.reload()
     } else {
-      window.location.href = 'http://localhost:5000/auth/student/google'
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      window.location.href = `${apiBase}/auth/student/google`
     }
   }
 

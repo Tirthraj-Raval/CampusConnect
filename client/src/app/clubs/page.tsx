@@ -57,8 +57,8 @@ const ExploreClubsPage = () => {
       try {
         setIsLoading(true);
         setError(null);
-        
-        const res = await fetch('http://localhost:5000/api/club', {
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+        const res = await fetch(`${apiBase}/api/club`, {
           credentials: 'include',
         });
 

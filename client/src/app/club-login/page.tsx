@@ -12,9 +12,10 @@ export default function ClubLoginPage() {
 
   const handleLogin = async () => {
     try {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
       setLoading(true);
       // Redirect to your backend OAuth endpoint
-      window.location.href = 'http://localhost:5000/auth/club/google';
+      window.location.href = `${apiBase}/auth/club/google`;
     } catch (err) {
       console.error("Login failed. Please try again.");
     } finally {

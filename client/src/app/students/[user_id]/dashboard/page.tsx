@@ -312,8 +312,9 @@ const [showFilters, setShowFilters] = useState(false);
 
   // Socket initialization
   useEffect(() => {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
     if (!socketRef.current) {
-      const socket = io('http://localhost:5000', {
+      const socket = io(apiBase, {
         transports: ['websocket'],
         withCredentials: true,
       });
@@ -337,7 +338,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchAndSubscribe = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/event-capacity', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/event-capacity`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -409,7 +411,8 @@ const [showFilters, setShowFilters] = useState(false);
 
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/student/search?query=${encodeURIComponent(query.trim())}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/search?query=${encodeURIComponent(query.trim())}`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -429,7 +432,8 @@ const [showFilters, setShowFilters] = useState(false);
 
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/club/events/search?query=${encodeURIComponent(query.trim())}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/events/search?query=${encodeURIComponent(query.trim())}`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -449,7 +453,8 @@ const [showFilters, setShowFilters] = useState(false);
 
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/club/clubs/search?query=${encodeURIComponent(query.trim())}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/clubs/search?query=${encodeURIComponent(query.trim())}`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -488,7 +493,8 @@ const [showFilters, setShowFilters] = useState(false);
   // API Functions
   const fetchStudent = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/me', { credentials: 'include' });
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/me`, { credentials: 'include' });
       const data = await res.json();
       setStudent(data);
       setUpdateName(data.name || '');
@@ -500,7 +506,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const updateStudent = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/me', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/me`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -521,7 +528,8 @@ const [showFilters, setShowFilters] = useState(false);
     }
     
     try {
-      const res = await fetch('http://localhost:5000/api/student/me', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/me`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -535,7 +543,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchSubscriptions = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/subscriptions', { credentials: 'include' });
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/subscriptions`, { credentials: 'include' });
       const data = await res.json();
       setSubscriptions(data);
     } catch (err) {
@@ -545,7 +554,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const subscribeClub = async (clubId: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/student/subscriptions/${clubId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/subscriptions/${clubId}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -566,7 +576,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const unsubscribeClub = async (clubId: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/student/subscriptions/${clubId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/subscriptions/${clubId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -585,7 +596,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchRsvps = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/rsvps', { credentials: 'include' });
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/rsvps`, { credentials: 'include' });
       const data = await res.json();
       setRsvps(data);
     } catch (err) {
@@ -595,7 +607,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const rsvpEvent = async (eventId: string) => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/rsvps', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/rsvps`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -625,7 +638,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const cancelRsvp = async (eventId: number) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/student/rsvps/${eventId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/rsvps/${eventId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -652,7 +666,8 @@ const [showFilters, setShowFilters] = useState(false);
   const submitFeedback = async () => {
     try {
       console.log("Feedback Event Id", selectedEvent?.id);
-      const res = await fetch('http://localhost:5000/api/student/feedback', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/feedback`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -681,8 +696,9 @@ const [showFilters, setShowFilters] = useState(false);
 
     useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
       if (eventSearchQuery.trim().length > 0) {
-        fetch(`http://localhost:5000/api/club/events/search?query=${encodeURIComponent(eventSearchQuery)}`)
+        fetch(`${apiBase}/api/club/events/search?query=${encodeURIComponent(eventSearchQuery)}`)
           .then(res => res.json())
           .then(data => setEventSearchResults(data))
           .catch(err => console.error('Search error:', err));
@@ -695,7 +711,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const getFeedback = async (eventId: number) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/student/feedback/${eventId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/feedback/${eventId}`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -708,7 +725,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchCertificates = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/certificates', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/certificates`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -721,7 +739,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchAllEvents = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/club/events/all');
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/events/all`);
       const data = await res.json();
       setAllEvents(data);
     } catch (err) {
@@ -731,7 +750,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchEventDetails = async (eventId: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/club/events/${eventId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/events/${eventId}`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -745,7 +765,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchSubscribedEvents = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/subscriptions/events', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/subscriptions/events`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -757,7 +778,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchActivityStatus = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/activity-status', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/activity-status`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -769,7 +791,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchNotifications = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/student/notifications', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/notifications`, {
         credentials: 'include',
       });
       const data: Notification[] = await res.json();
@@ -781,7 +804,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const markAsRead = async (notificationId: number, clubId: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/student/notifications/${notificationId}/read`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/student/notifications/${notificationId}/read`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -808,7 +832,8 @@ const [showFilters, setShowFilters] = useState(false);
 
   const fetchClubs = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/club/', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -821,7 +846,8 @@ const [showFilters, setShowFilters] = useState(false);
   const handleSelectClub = async (clubId: string) => {
     setSelectedClubId(clubId);
     try {
-      const res = await fetch(`http://localhost:5000/api/club/${clubId}/events/`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/${clubId}/events/`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -835,7 +861,8 @@ const [showFilters, setShowFilters] = useState(false);
     if (!selectedClubId) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/club/${selectedClubId}/events/${eventId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/${selectedClubId}/events/${eventId}`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -3064,13 +3091,14 @@ const [showFilters, setShowFilters] = useState(false);
                   >
                     <motion.button
                     onClick={() => {
-                      fetch('http://localhost:5000/auth/logout', {
+                      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+                      fetch(`${apiBase}/auth/logout`, {
                       method: 'GET',
                       credentials: 'include',
                       })
                       .then(() => {
                         setLogoutOpen(false);
-                        window.location.href = "http://localhost:3000";
+                        window.location.href = "/";
                         showSuccessToast('Logged out successfully!');
                       })
                       .catch((err) => {

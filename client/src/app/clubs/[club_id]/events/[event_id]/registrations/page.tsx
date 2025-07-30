@@ -7,7 +7,8 @@ const Registrations = () => {
   const [regs, setRegs] = useState([]);
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/club/${club_id}/events/${event_id}/registrations`)
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+    fetch(`${apiBase}/api/club/${club_id}/events/${event_id}/registrations`)
       .then(res => res.json())
       .then(setRegs);
   }, [event_id, club_id]);

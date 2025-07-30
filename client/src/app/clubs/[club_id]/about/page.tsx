@@ -24,7 +24,8 @@ const ClubDashboard = ({ params }: { params: Promise<{ club_id: string }> }) => 
   useEffect(() => {
     const fetchClub = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/club/${club_id}`, {
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+        const res = await fetch(`${apiBase}/api/club/${club_id}`, {
           credentials: 'include',
         });
         const data: Club = await res.json();

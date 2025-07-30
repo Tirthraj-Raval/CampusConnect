@@ -22,7 +22,8 @@ const EditEvent = () => {
   useEffect(() => {
     const fetchEvent = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/club/${club_id}/events/${event_id}`, {
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+        const res = await fetch(`${apiBase}/api/club/${club_id}/events/${event_id}`, {
           credentials: 'include',
         });
         if (!res.ok) throw new Error('Failed to fetch event');

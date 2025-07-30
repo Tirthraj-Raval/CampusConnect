@@ -21,7 +21,8 @@ const CreateEvent = () => {
     setError('');
     
     try {
-      const res = await fetch(`http://localhost:5000/api/club/${params.club_id}/events`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/${params.club_id}/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

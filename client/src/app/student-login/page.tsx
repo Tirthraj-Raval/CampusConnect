@@ -8,7 +8,8 @@ export default function LoginPage() {
   }, []);
 
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:5000/auth/student/google';
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+    window.location.href = `${apiBase}/auth/student/google`;
   };
 
   return (

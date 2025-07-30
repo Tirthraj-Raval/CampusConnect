@@ -310,6 +310,7 @@ export default function ClubDashboard() {
     if (!clubId) return;
     setLoading(true);
     try {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
       const [
         clubRes,
         committeeRes,
@@ -320,42 +321,42 @@ export default function ClubDashboard() {
         analyticsRes,
         rsvpsRes
       ] = await Promise.all([
-        fetch(`http://localhost:5000/api/club/${clubId}`, {
+        fetch(`${apiBase}/api/club/${clubId}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
         }),
-        fetch(`http://localhost:5000/api/clubs/${clubId}/committee`, {
+        fetch(`${apiBase}/api/clubs/${clubId}/committee`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
         }),
-        fetch(`http://localhost:5000/api/club/${clubId}/events`, {
+        fetch(`${apiBase}/api/club/${clubId}/events`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
         }),
-        fetch(`http://localhost:5000/api/clubs/${clubId}/certificates`, {
+        fetch(`${apiBase}/api/clubs/${clubId}/certificates`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
         }),
-        fetch(`http://localhost:5000/api/clubs/${clubId}/feedbacks`, {
+        fetch(`${apiBase}/api/clubs/${clubId}/feedbacks`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
         }),
-        fetch(`http://localhost:5000/api/club/${clubId}/subscriptions`, {
+        fetch(`${apiBase}/api/club/${clubId}/subscriptions`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
         }),
-        fetch(`http://localhost:5000/api/clubs/${clubId}/dashboard/analytics`, {
+        fetch(`${apiBase}/api/clubs/${clubId}/dashboard/analytics`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
         }),
-        fetch(`http://localhost:5000/api/clubs/${clubId}/rsvps`, {
+        fetch(`${apiBase}/api/clubs/${clubId}/rsvps`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -422,8 +423,9 @@ export default function ClubDashboard() {
     fetchData();
 
     // Initialize WebSocket
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
     if (!socketRef.current) {
-      const socket = io('http://localhost:5000', {
+      const socket = io(apiBase, {
         transports: ['websocket'],
         withCredentials: true,
       });
@@ -490,7 +492,8 @@ export default function ClubDashboard() {
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/api/club/users/search?q=${encodeURIComponent(query)}&universityId=${clubData?.university_id || ''}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/users/search?q=${encodeURIComponent(query)}&universityId=${clubData?.university_id || ''}`, {
         credentials: 'include'
       });
       
@@ -525,7 +528,8 @@ export default function ClubDashboard() {
   const handleAddCommitteeMember = async (userId: string, role: 'member' | 'editor' | 'secretary') => {
     try {
       console.log("User Id received:", userId);
-      const res = await fetch(`http://localhost:5000/api/clubs/${clubId}/committee`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/clubs/${clubId}/committee`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -551,7 +555,8 @@ export default function ClubDashboard() {
 
   const handleEditCommitteeMember = async (userId: string, role: 'member' | 'editor' | 'secretary') => {
     try {
-      const res = await fetch(`http://localhost:5000/api/clubs/${clubId}/committee/${userId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/clubs/${clubId}/committee/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -577,7 +582,8 @@ export default function ClubDashboard() {
     if (!confirm('Are you sure you want to remove this committee member?')) return;
     
     try {
-      const res = await fetch(`http://localhost:5000/api/clubs/${clubId}/committee/${userId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/clubs/${clubId}/committee/${userId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -598,7 +604,8 @@ export default function ClubDashboard() {
   const handleCreateEvent = async (eventData: Partial<Event>) => {
     try {
       console.log("Event Data received:", eventData);
-      const res = await fetch(`http://localhost:5000/api/club/${clubId}/events`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/${clubId}/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -630,7 +637,8 @@ export default function ClubDashboard() {
 
   const handleEditEvent = async (eventId: string, eventData: Partial<Event>) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/club/${clubId}/events/${eventId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/${clubId}/events/${eventId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -655,7 +663,8 @@ export default function ClubDashboard() {
     if (!confirm('Are you sure you want to delete this event?')) return;
     
     try {
-      const res = await fetch(`http://localhost:5000/api/club/${clubId}/events/${eventId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/${clubId}/events/${eventId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -680,7 +689,8 @@ export default function ClubDashboard() {
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/api/clubs/${clubId}/certificates/generate`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/clubs/${clubId}/certificates/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -716,7 +726,8 @@ export default function ClubDashboard() {
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/api/clubs/${clubId}/events/${selectedEventId}/notify`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/clubs/${clubId}/events/${selectedEventId}/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -740,7 +751,8 @@ export default function ClubDashboard() {
   // Club Settings
   const handleUpdateClubSettings = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/club/${clubId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/${clubId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -764,7 +776,8 @@ export default function ClubDashboard() {
     if (!confirm('Are you sure you want to delete this club? This action cannot be undone.')) return;
     
     try {
-      const res = await fetch(`http://localhost:5000/api/club/${clubId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/club/${clubId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -784,7 +797,8 @@ export default function ClubDashboard() {
   // Export functions
   const handleExportFeedback = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/clubs/${clubId}/feedbacks/exports`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/clubs/${clubId}/feedbacks/exports`, {
         credentials: 'include'
       });
       const blob = await res.blob();
@@ -805,7 +819,8 @@ export default function ClubDashboard() {
   //Added by me
   const handleDownloadRSVPbyEvent = async (eventId: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/clubs/${clubId}/rsvps/download?eventId=${eventId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/clubs/${clubId}/rsvps/download?eventId=${eventId}`, {
         method: 'GET',
         credentials: 'include',
       });
@@ -832,10 +847,11 @@ export default function ClubDashboard() {
 
   const handleExportRSVPs = async (eventId?: string) => {
     try {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
       const url = eventId 
-        ? `http://localhost:5000/api/clubs/${clubId}/rsvps/download?eventId=${eventId}`
-        : `http://localhost:5000/api/clubs/${clubId}/rsvps/download/all`;
-      
+        ? `${apiBase}/api/clubs/${clubId}/rsvps/download?eventId=${eventId}`
+        : `${apiBase}/api/clubs/${clubId}/rsvps/download/all`;
+
       const res = await fetch(url, { credentials: 'include' });
       const blob = await res.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
@@ -857,7 +873,8 @@ export default function ClubDashboard() {
   // Logout function
   const logout = async () => {
     try {
-      await fetch('http://localhost:5000/auth/logout', { 
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+      await fetch(`${apiBase}/auth/logout`, {
         method: 'GET',
         credentials: 'include' 
       });
