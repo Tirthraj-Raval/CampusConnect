@@ -27,6 +27,7 @@ const studentAuth = require('../routes/studentAuth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const appUrl = process.env.APP_URL || 'http://localhost:3000';
+const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -41,9 +42,10 @@ app.set('socketio', io);
 
 // ✅ Middleware
 app.use(cors({
-  origin: appUrl,
+  origin: [appUrl, backendUrl],
   credentials: true,
 }));
+
 app.use(express.json());
 app.use(morgan('dev'));
 
