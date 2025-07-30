@@ -425,7 +425,7 @@ export default function ClubDashboard() {
     // Initialize WebSocket
     const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
     if (!socketRef.current) {
-      const socket = io(apiBase, {
+      const socket = io("ws://campusconnect-backend-di06.onrender.com", {
         transports: ['websocket'],
         withCredentials: true,
       });

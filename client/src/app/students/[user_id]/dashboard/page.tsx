@@ -314,7 +314,7 @@ const [showFilters, setShowFilters] = useState(false);
   useEffect(() => {
     const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
     if (!socketRef.current) {
-      const socket = io(apiBase, {
+      const socket = io("ws://campusconnect-backend-di06.onrender.com", {
         transports: ['websocket'],
         withCredentials: true,
       });
@@ -698,7 +698,7 @@ const [showFilters, setShowFilters] = useState(false);
     const delayDebounceFn = setTimeout(() => {
       const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
       if (eventSearchQuery.trim().length > 0) {
-        fetch(`${apiBase}/api/club/events/search?query=${encodeURIComponent(eventSearchQuery)}`)
+        fetch(`${apiBase}/api/club/events/search?query=${encodeURIComponent(eventSearchQuery)}`, {credentials: 'include'})
           .then(res => res.json())
           .then(data => setEventSearchResults(data))
           .catch(err => console.error('Search error:', err));
