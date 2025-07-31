@@ -67,7 +67,13 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Certificate Route files
-app.use('/certificates', express.static(path.join(__dirname, '../certificates')));
+// Replace your current certificate route with:
+app.use('/certificates', express.static(path.join(__dirname, '../certificates'), {
+  setHeaders: (res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  }
+}));
 
 // ✅ Mount routers
 app.use('/api/university', universityRoutes);
@@ -140,11 +146,6 @@ app.get('/auth/club/google/callback',
 
 // ✅ Auth Session Info
 app.get('/api/auth/me', (req, res) => {
-  console.log("session info:", req.session);
-  console.log("Session ID:", req.sessionID);
-  console.log("Session cookie:", req.session.cookie);
-  console.log("User found in request:", req.user);
-  console.log("Is Authenticated:", req.isAuthenticated());
   if (req.isAuthenticated() && req.user) {
     const user = req.user;
 

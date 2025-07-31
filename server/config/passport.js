@@ -20,7 +20,6 @@ function generateUUIDFromGoogleId(googleId) {
 
 // ✅ Unified serialize/deserialize with superadmin support
 passport.serializeUser((user, done) => {
-  console.log("Serializing user:", user);
   let type = null;
 
   if (user?.role === 'superadmin') {
@@ -39,7 +38,6 @@ passport.serializeUser((user, done) => {
 
 passport.deserializeUser(async (obj, done) => {
   try {
-    console.log("Deserializing user:", obj);
     if (obj.type === 'superadmin' || obj.type === 'student') {
       const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [obj.id]);
       if (rows.length === 0) return done(null, false);

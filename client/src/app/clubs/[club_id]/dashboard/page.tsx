@@ -1574,53 +1574,55 @@ export default function ClubDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredRSVPs.length > 0 ? (
-                filteredRSVPs.map((rsvp, index) => {
+                {filteredRSVPs.length > 0 ? (
+                filteredRSVPs
+                  .filter((rsvp) => rsvp.user_email && rsvp.user_id && rsvp.user_name)
+                  .map((rsvp, index) => {
                   const event = events.find((e) => e.id === rsvp.event_id);
                   return (
                     <tr key={index} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-semibold text-gray-800">{rsvp.user_name || 'Unknown User'}</p>
-                          <p className="text-sm text-gray-600">{rsvp.user_email}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-gray-800">{event?.title || 'Event not found'}</p>
-                        <p className="text-xs text-gray-500">{event?.location}</p>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {event ? formatDate(event.event_date) : 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {formatDate(rsvp.rsvp_time)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                          rsvp.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {rsvp.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <motion.button
-                          onClick={() => handleDownloadRSVPbyEvent(rsvp.event_id)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          whileHover={{ scale: 1.1 }}
-                        >
-                          <Download className="w-4 h-4" />
-                        </motion.button>
-                      </td>
+                    <td className="px-6 py-4">
+                      <div>
+                      <p className="font-semibold text-gray-800">{rsvp.user_name || 'Unknown User'}</p>
+                      <p className="text-sm text-gray-600">{rsvp.user_email}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-gray-800">{event?.title || 'Event not found'}</p>
+                      <p className="text-xs text-gray-500">{event?.location}</p>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {event ? formatDate(event.event_date) : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {formatDate(rsvp.rsvp_time)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                      rsvp.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                      {rsvp.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <motion.button
+                      onClick={() => handleDownloadRSVPbyEvent(rsvp.event_id)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      >
+                      <Download className="w-4 h-4" />
+                      </motion.button>
+                    </td>
                     </tr>
                   );
-                })
-              ) : (
+                  })
+                ) : (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                    No RSVPs found matching your filters
+                  No RSVPs found matching your filters
                   </td>
                 </tr>
-              )}
+                )}
             </tbody>
           </table>
         </div>

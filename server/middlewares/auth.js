@@ -1,6 +1,4 @@
 function ensureAuthenticated(req, res, next) {
-  console.log("Checking authentication for user:", req.user);
-  console.log("Request received:", req);
   if (req.isAuthenticated()) return next();
   return res.status(401).json({ message: 'Login required' });
 }
