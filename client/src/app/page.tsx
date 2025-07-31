@@ -30,7 +30,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
-    fetch(`${apiBase}/login`, {
+    fetch(`${apiBase}/api/auth/me`, {
       credentials: 'include',
     })
       .then(res => {

@@ -314,7 +314,7 @@ const [showFilters, setShowFilters] = useState(false);
   useEffect(() => {
     const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
     if (!socketRef.current) {
-      const socket = io("ws://campusconnect-backend-di06.onrender.com", {
+      const socket = io(apiBase, {
         transports: ['websocket'],
         withCredentials: true,
       });

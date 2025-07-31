@@ -7,6 +7,7 @@ require('dotenv').config();
 require('../config/passport');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const pool = require('../utils/db');
 const universityRoutes = require('../routes/university');
@@ -64,6 +65,9 @@ app.use(session({
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Certificate Route files
+app.use('/certificates', express.static(path.join(__dirname, '../certificates')));
 
 // ✅ Mount routers
 app.use('/api/university', universityRoutes);
@@ -135,7 +139,7 @@ app.get('/auth/club/google/callback',
 
 
 // ✅ Auth Session Info
-app.get('/login', (req, res) => {
+app.get('/api/auth/me', (req, res) => {
   console.log("session info:", req.session);
   console.log("Session ID:", req.sessionID);
   console.log("Session cookie:", req.session.cookie);
