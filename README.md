@@ -7,6 +7,9 @@ Sure! Here's a **detailed, styled, production-grade `README.md`** for your proje
 
 > An all-in-one university student engagement platform featuring student dashboards, club management, real-time event tracking, certificate generation, analytics, and live notifications.
 
+### Project Overview
+
+https://github.com/user-attachments/assets/4b985d66-b8c9-4067-9377-d3f44e8a2d12
 
 ---
 
