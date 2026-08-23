@@ -3,11 +3,14 @@
 
 import { motion } from 'framer-motion'
 
+// Facts about what the platform is and does — not usage metrics. Every value
+// here is verifiable from the product itself, so nothing on this page has to be
+// walked back once real numbers exist.
 const stats = [
-  { value: "500+", label: "Active Clubs" },
-  { value: "10K+", label: "Monthly Users" },
-  { value: "2K+", label: "Events Monthly" },
-  { value: "95%", label: "Satisfaction Rate" }
+  { value: "2", label: "Account Types" },
+  { value: "6", label: "Built-in Modules" },
+  { value: "₹0", label: "Cost to Use" },
+  { value: "Live", label: "Real-time Updates" }
 ]
 
 export default function StatsSection() {
@@ -24,10 +27,11 @@ export default function StatsSection() {
           className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-600 to-sky-600 bg-clip-text text-transparent mb-4">
-            Trusted by Thousands
+            Built for Campus Life
           </h2>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Join the largest campus community platform connecting students across colleges
+            One place for clubs to run events and for students to find them — events,
+            registrations, certificates and feedback, all in a single platform
           </p>
         </motion.div>
         

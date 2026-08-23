@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../utils/db');
-const {restrictTo} = require("../middlewares/auth");
+const {restrictTo, ensureAuthenticated} = require("../middlewares/auth");
 const verifyClubAccess = require('../middlewares/verifyClubAccess'); // Middleware to verify club access
 
 // ✅ GET club by ID (used for dashboard, about page)
@@ -29,9 +29,15 @@ router.get('/:clubId', async (req, res) => {
 
 
 // ✅ PUT update club profile (logo, description, about_html, etc.)
-router.put('/:clubId', async (req, res) => {
+// Only the club account itself is allowed to edit its profile.
+// `about_html` is sanitized server-side (see utils/htmlSanitize.js).
+const { sanitizeRichHtml } = require('../utils/htmlSanitize');
+
+router.put('/:clubId', verifyClubAccess, async (req, res) => {
   const clubId = req.params.clubId;
   const { name, description, logo_url, about_html } = req.body;
+
+  const safeAboutHtml = about_html == null ? null : sanitizeRichHtml(about_html);
 
   try {
     const result = await pool.query(
@@ -39,7 +45,7 @@ router.put('/:clubId', async (req, res) => {
        SET name = $1, description = $2, logo_url = $3, about_html = $4
        WHERE id = $5
        RETURNING *`,
-      [name, description, logo_url, about_html, clubId]
+      [name, description, logo_url, safeAboutHtml, clubId]
     );
 
     if (result.rows.length === 0) {
@@ -53,61 +59,31 @@ router.put('/:clubId', async (req, res) => {
   }
 });
 
-// Update club profile
-router.put('/:clubId', async (req, res) => {
-  const clubId = req.params.clubId;
-  const { name, logo_url, description, about_html } = req.body;
-
-  try {
-    const result = await pool.query(`
-      UPDATE clubs
-      SET name = $1, logo_url = $2, description = $3, about_html = $4
-      WHERE id = $5
-      RETURNING *
-    `, [name, logo_url, description, about_html, clubId]);
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('Update club error:', err);
-    res.status(500).json({ error: 'Update failed' });
-  }
-});
-
-// Get events for a club
-// Get events for a club with RSVP count and all RSVPs
+// Get events for a club, each with its RSVP count.
+//
+// Reachable by students as well as the owning club (the student dashboard
+// lists a club's events), so it must not return per-attendee rows. It
+// previously attached `all_rsvps` — every RSVP row including user_ids — which
+// no client ever read, and which leaked the full attendee list of every event
+// to any unauthenticated caller.
+//
+// The old shape also ran 2 extra queries per event (N+1); a single LEFT JOIN
+// with GROUP BY returns the same counts in one round trip.
 router.get('/:clubId/events', async (req, res) => {
   const clubId = req.params.clubId;
 
   try {
-    const eventsResult = await pool.query(
-      `SELECT * FROM events WHERE club_id = $1 ORDER BY event_date DESC`,
+    const result = await pool.query(
+      `SELECT e.*, COUNT(r.id)::int AS rsvps
+         FROM events e
+         LEFT JOIN rsvps r ON r.event_id = e.id
+        WHERE e.club_id = $1
+        GROUP BY e.id
+        ORDER BY e.event_date DESC`,
       [clubId]
     );
 
-    const events = eventsResult.rows;
-
-    // For each event, fetch its RSVP count and full RSVP data
-    const enrichedEvents = await Promise.all(
-      events.map(async (event) => {
-        const rsvpCountResult = await pool.query(
-          `SELECT COUNT(*) FROM rsvps WHERE event_id = $1`,
-          [event.id]
-        );
-
-        const allRsvpsResult = await pool.query(
-          `SELECT * FROM rsvps WHERE event_id = $1`,
-          [event.id]
-        );
-
-        return {
-          ...event,
-          rsvps: parseInt(rsvpCountResult.rows[0].count, 10),
-          all_rsvps: allRsvpsResult.rows,
-        };
-      })
-    );
-
-    res.json(enrichedEvents);
+    res.json(result.rows);
   } catch (err) {
     console.error('Fetch events with RSVPs error:', err);
     res.status(500).json({ error: 'Could not fetch events with RSVP data' });
@@ -115,7 +91,10 @@ router.get('/:clubId/events', async (req, res) => {
 });
 
 
-router.get('/:clubId/subscriptions', async (req, res) => {
+// Subscriber roster — names and email addresses. Restricted to the owning club
+// account; this was previously unauthenticated, so anyone who knew a club id
+// could dump its entire follower list with contact details.
+router.get('/:clubId/subscriptions', verifyClubAccess, async (req, res) => {
   const { clubId } = req.params;
 
   try {
@@ -144,16 +123,31 @@ router.get('/:clubId/subscriptions', async (req, res) => {
 });
 
 
-// Create new event for club
-router.post('/:clubId/events', async (req, res) => {
+// Create new event for club — must be the club account itself.
+// If `is_custom_html`, sanitize `custom_html` before storing.
+router.post('/:clubId/events', verifyClubAccess, async (req, res) => {
   const clubId = req.params.clubId;
-  const { title, description, event_date, max_capacity, location, status, poster_url } = req.body;
+  const {
+    title, description, event_date, max_capacity, location, status, poster_url,
+    is_custom_html, custom_html,
+  } = req.body;
+
+  const safeCustomHtml = is_custom_html && custom_html
+    ? sanitizeRichHtml(custom_html)
+    : null;
+
   try {
     const result = await pool.query(`
-      INSERT INTO events (club_id, title, description, event_date, max_capacity, location, status, poster_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO events (
+        club_id, title, description, event_date, max_capacity, location,
+        status, poster_url, is_custom_html, custom_html
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
-    `, [clubId, title, description, event_date, max_capacity, location, status, poster_url]);
+    `, [
+      clubId, title, description, event_date, max_capacity, location,
+      status, poster_url, Boolean(is_custom_html), safeCustomHtml,
+    ]);
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -173,19 +167,60 @@ router.get('/:clubId/events/:eventId', async (req, res) => {
 // PUT (edit) event
 router.put('/:clubId/events/:eventId', verifyClubAccess, async (req, res) => {
   const { eventId } = req.params;
-  const { title, description, event_date, max_capacity, location, status, poster_url } = req.body;
-  console.log("Request to edit event:", { eventId, title, description, event_date, max_capacity, location, status, poster_url });
-  const result = await pool.query(`
-    UPDATE events SET title = $1, description = $2, event_date = $3, max_capacity = $4, location = $5, status = $6, poster_url = $7 WHERE id = $8 RETURNING *
-  `, [title, description, event_date, max_capacity, location, status, poster_url, eventId]);
-  res.json(result.rows[0]);
+  const {
+    title, description, event_date, max_capacity, location, status, poster_url,
+    is_custom_html, custom_html,
+  } = req.body;
+
+  const safeCustomHtml = is_custom_html && custom_html
+    ? sanitizeRichHtml(custom_html)
+    : null;
+
+  // Scope the UPDATE to the club from the verified session as well as the
+  // event id. Without the club_id predicate, a club account could edit another
+  // club's event by guessing its id — verifyClubAccess only proves the caller
+  // owns the club named in the path, not that the event belongs to it.
+  try {
+    const result = await pool.query(`
+      UPDATE events
+         SET title = $1, description = $2, event_date = $3, max_capacity = $4,
+             location = $5, status = $6, poster_url = $7,
+             is_custom_html = $8, custom_html = $9
+       WHERE id = $10 AND club_id = $11
+       RETURNING *
+    `, [
+      title, description, event_date, max_capacity, location, status, poster_url,
+      Boolean(is_custom_html), safeCustomHtml, eventId, req.params.clubId,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Event not found for this club' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    // Previously unguarded: a failing query rejected the handler's promise and
+    // left the request hanging until the client timed out.
+    console.error('Update event error:', err);
+    res.status(500).json({ error: 'Failed to update event' });
+  }
 });
 
 
 router.delete('/:clubId/events/:eventId', verifyClubAccess, async (req, res) => {
-  const { eventId } = req.params;
+  const { eventId, clubId } = req.params;
   try {
-    await pool.query('DELETE FROM events WHERE id = $1', [eventId]);
+    // Scoped to club_id for the same reason as the UPDATE above: prevent one
+    // club from deleting another club's event by id.
+    const result = await pool.query(
+      'DELETE FROM events WHERE id = $1 AND club_id = $2',
+      [eventId, clubId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Event not found for this club' });
+    }
+
     res.status(204).end();
   } catch (err) {
     console.error('Delete error:', err);
@@ -194,9 +229,11 @@ router.delete('/:clubId/events/:eventId', verifyClubAccess, async (req, res) => 
 });
 
 // GET /api/users/search?q=term&universityId=...
-router.get('/users/search', async (req, res) => {
+// Directory lookup used by the club dashboard when appointing committee
+// members. Returns names and email addresses, so it requires a session — it
+// was previously open, which let anyone enumerate a university's students.
+router.get('/users/search', ensureAuthenticated, async (req, res) => {
   const { q, universityId } = req.query;
-  console.log("This backend is hit with query:", q, "and universityId:", universityId);
 
   if (!q || !universityId) {
     return res.status(400).json({ error: 'Missing query or universityId' });
@@ -213,7 +250,6 @@ router.get('/users/search', async (req, res) => {
       `,
       [universityId, `%${q}%`]
     );
-    console.log("First user found:", result.rows[0]);
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching users:', err);
@@ -239,9 +275,11 @@ router.get('/:clubId/events/:eventId/registrations', verifyClubAccess, async (re
 //Route for fetching all clubs
 router.get('/', async (req, res) => {
   try {
+    // Explicit column list rather than SELECT *. This endpoint is public, and
+    // `clubs` also holds `google_id` and the club's login `email`, neither of
+    // which belongs in a public directory response.
     const { rows } = await pool.query(`
-      SELECT 
-        * 
+      SELECT id, name, description, logo_url, about_html, university_id, created_at
       FROM clubs
       ORDER BY created_at DESC
     `);
@@ -327,8 +365,13 @@ router.get('/clubs/search', async (req, res) => {
 
   try {
     const searchText = `%${query.trim().toLowerCase()}%`;
+    // Same reasoning as the club directory above: no SELECT * on a public
+    // endpoint over a table holding google_id and the club login email.
     const result = await pool.query(
-      `SELECT * FROM clubs WHERE LOWER(name) LIKE $1 ORDER BY name LIMIT 20`,
+      `SELECT id, name, description, logo_url, about_html, university_id, created_at
+         FROM clubs
+        WHERE LOWER(name) LIKE $1
+        ORDER BY name LIMIT 20`,
       [searchText]
     );
 

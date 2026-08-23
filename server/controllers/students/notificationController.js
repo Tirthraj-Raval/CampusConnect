@@ -35,15 +35,35 @@ exports.getStudentNotifications = async (req, res) => {
 // Marks a notification as read by inserting into notification_reads
 exports.markNotificationAsRead = async (req, res) => {
   const { notificationId } = req.params;
-  const userId = req.user.id; // From JWT
-  const { clubId } = req.body;
+  const userId = req.user.id;
+
+  const id = Number(notificationId);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: 'A valid notification id is required' });
+  }
 
   try {
+    // Resolve club_id from the notification itself instead of trusting a body
+    // field. notification_reads.club_id is NOT NULL, so a caller that omitted
+    // clubId — or had it undefined in scope — produced a constraint violation
+    // surfacing as a 500. The notification already knows its own club.
+    //
+    // Filtering on user_id here doubles as an ownership check: a student can
+    // only mark their own notifications read, not arbitrary ids.
+    const { rows } = await db.query(
+      `SELECT club_id FROM scheduled_notifications WHERE id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
     await db.query(`
       INSERT INTO notification_reads (notification_id, user_id, club_id)
       VALUES ($1, $2, $3)
-      ON CONFLICT DO NOTHING
-    `, [notificationId, userId, clubId]);
+      ON CONFLICT (notification_id, user_id) DO NOTHING
+    `, [id, userId, rows[0].club_id]);
 
     res.status(200).json({ message: "Marked as read" });
   } catch (err) {

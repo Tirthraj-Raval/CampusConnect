@@ -30,11 +30,19 @@ const PORT = process.env.PORT || 5000;
 const appUrl = process.env.APP_URL || 'http://localhost:3000';
 const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
 
+const allowedOrigins = [
+  process.env.APP_URL,
+  process.env.BACKEND_URL,
+  'http://localhost:3000',
+  'http://localhost:5000',
+].filter(Boolean);
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*', // or restrict to your frontend domain
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
@@ -43,7 +51,7 @@ app.set('socketio', io);
 
 // ✅ Middleware
 app.use(cors({
-  origin: [process.env.APP_URL, process.env.BACKEND_URL, 'http://localhost:3000', 'http://localhost:5000'],
+  origin: allowedOrigins,
   credentials: true,
 }));
 
@@ -52,19 +60,32 @@ app.set('trust proxy', 1);
 app.use(express.json());
 app.use(morgan('dev'));
 
-app.use(session({
-  secret: 'keyboard cat', // keep safe in prod
+if (!process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET is not set — refusing to start with an insecure fallback.');
+}
+
+// Session middleware is extracted into a variable so we can share it with
+// Socket.IO via io.engine.use(...) — that's what gives every socket access
+// to the authenticated Passport user on socket.request.user.
+const sessionMiddleware = session({
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true, // set to true if using HTTPS
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    sameSite: 'none'
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   }
-}));
+});
 
+app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Share session + passport with Socket.IO so socket handlers see req.user.
+io.engine.use(sessionMiddleware);
+io.engine.use(passport.initialize());
+io.engine.use(passport.session());
 
 // Certificate Route files
 // Replace your current certificate route with:
@@ -93,20 +114,77 @@ app.use('/api/student', studentRoutes);
 app.use('/auth/student', studentAuth);
 
 
-// Socket.IO logic
+// ---------------------------------------------------------------------------
+// Socket.IO — authenticated sessions + room conventions.
+// ---------------------------------------------------------------------------
+// Room conventions:
+//   user_<userId>   → per-user firehose (notifications, personal RSVP echoes)
+//   club_<clubId>   → per-club firehose (new subscription, new feedback, etc.)
+//   event_<eventId> → live event page (seat counter, live updates)
+//
+// The server OWNS the room name — clients emit bare IDs and the server prefixes
+// them. Ownership rooms (`user_*`, `club_*`) are auto-joined on connect based
+// on the authenticated session, so clients don't have to remember. Membership
+// in the ownership rooms is also enforced: you cannot subscribe to another
+// user's notification firehose even if you know their id.
 io.on('connection', (socket) => {
-  console.log('🔌 New client connected:', socket.id);
+  const req = socket.request;
+  const user = req.user || null;
 
-  // Join room for an event to receive real-time RSVP updates
+  console.log(
+    '🔌 New client connected:',
+    socket.id,
+    user ? `as ${user.type} ${user.id}` : '(unauthenticated)'
+  );
+
+  // Auto-join ownership rooms based on the session.
+  if (user) {
+    if (user.type === 'club') {
+      socket.join(`club_${user.id}`);
+    } else if (user.type === 'student' || user.type === 'superadmin') {
+      socket.join(`user_${user.id}`);
+    }
+  }
+
+  // Live-event pages: any authenticated user can subscribe to events they can
+  // legitimately see. We don't enforce read permission here — the browser only
+  // shows the page after the REST call succeeds, so joining the room only
+  // matters to receive real-time deltas.
   socket.on('join_event_room', (eventId) => {
+    if (!user) return;
+    if (eventId === undefined || eventId === null) return;
     socket.join(`event_${eventId}`);
     console.log(`🟢 Socket ${socket.id} joined event_${eventId}`);
   });
 
-  // Optionally: leave room
   socket.on('leave_event_room', (eventId) => {
+    if (eventId === undefined || eventId === null) return;
     socket.leave(`event_${eventId}`);
     console.log(`🔴 Socket ${socket.id} left event_${eventId}`);
+  });
+
+  // Manual join_user_room — legacy clients may still emit this. We only accept
+  // it if the id matches the authenticated user.
+  socket.on('join_user_room', (userId) => {
+    if (!user || String(user.id) !== String(userId)) {
+      console.log(`⛔ join_user_room denied for socket ${socket.id}`);
+      return;
+    }
+    socket.join(`user_${userId}`);
+  });
+
+  // Manual join_club_room — accepted only from the matching club account.
+  socket.on('join_club_room', (clubId) => {
+    if (!user || user.type !== 'club' || String(user.id) !== String(clubId)) {
+      console.log(`⛔ join_club_room denied for socket ${socket.id}`);
+      return;
+    }
+    socket.join(`club_${clubId}`);
+  });
+
+  socket.on('leave_club_room', (clubId) => {
+    if (clubId === undefined || clubId === null) return;
+    socket.leave(`club_${clubId}`);
   });
 
   socket.on('disconnect', () => {

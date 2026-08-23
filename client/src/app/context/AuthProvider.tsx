@@ -18,13 +18,18 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext)
 
+// Hoisted to module scope. NEXT_PUBLIC_* values are inlined at build time, so
+// this is a compile-time constant; declaring it inside the component made it a
+// missing effect dependency for no benefit.
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000'
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState(null)
   const [userType, setUserType] = useState<UserType>(null)
   const [loading, setLoading] = useState(true)
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000'
+
   useEffect(() => {
-    fetch(`${apiBase}/api/auth/me`, {
+    fetch(`${API_BASE}/api/auth/me`, {
       credentials: 'include',
     })
       .then(res => {

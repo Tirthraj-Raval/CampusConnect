@@ -17,6 +17,17 @@ export default function Navbar({ scrolled, user, userType, logout }: NavbarProps
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
 
+  // The home page used to render a mock dashboard inline for signed-in
+  // students, which doubled as their only route into the app. With that removed,
+  // the navbar is what gets them to their real dashboard. Superadmins have no
+  // single dashboard route, so they get no link.
+  const dashboardHref =
+    user && userType === 'student'
+      ? `/students/${user.id}/dashboard`
+      : user && userType === 'club'
+        ? `/clubs/${user.id}/dashboard`
+        : null;
+
   return (
     <nav className={`fixed w-full px-6 md:px-16 py-4 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-sm' : 'bg-transparent'}`}>
       <div className="flex justify-between items-center max-w-7xl mx-auto">
@@ -35,15 +46,25 @@ export default function Navbar({ scrolled, user, userType, logout }: NavbarProps
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-10">
           {user ? (
-            <motion.button
-              onClick={logout}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition"
-            >
-              <Image src="/google-icon.svg" alt="Google" width={20} height={20} className="mr-2" />
-              Logout ({userType === 'superadmin' ? 'Superadmin' : userType === 'club' ? 'Club' : 'Student'})
-            </motion.button>
+            <div className="flex items-center gap-3">
+              {dashboardHref && (
+                <Link
+                  href={dashboardHref}
+                  className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-sky-500 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition"
+                >
+                  My Dashboard
+                </Link>
+              )}
+              <motion.button
+                onClick={logout}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition"
+              >
+                <Image src="/google-icon.svg" alt="Google" width={20} height={20} className="mr-2" />
+                Logout ({userType === 'superadmin' ? 'Superadmin' : userType === 'club' ? 'Club' : 'Student'})
+              </motion.button>
+            </div>
           ) : (
             <div className="flex gap-3">
               <motion.button
@@ -118,12 +139,22 @@ export default function Navbar({ scrolled, user, userType, logout }: NavbarProps
                 Events
               </a>
               <a
-                href="#testimonials"
+                href="#who-its-for"
                 className="block px-3 py-2 text-gray-700 hover:text-emerald-600 transition font-medium"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Testimonials
+                Who It&apos;s For
               </a>
+
+              {dashboardHref && (
+                <Link
+                  href={dashboardHref}
+                  className="block px-3 py-2 text-emerald-600 hover:text-emerald-700 transition font-semibold"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  My Dashboard
+                </Link>
+              )}
 
               {user ? (
                 <div className="flex justify-center">

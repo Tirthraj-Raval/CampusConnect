@@ -1,28 +1,48 @@
 const db = require('../../utils/db');
+const { broadcastNewFeedback } = require('../../utils/realtime');
 
 exports.submitFeedback = async (req, res) => {
   const userId = req.user.id;
   const { event_id, rating, comment } = req.body;
 
+  const eventId = Number(event_id);
+  if (!Number.isInteger(eventId)) {
+    return res.status(400).json({ message: 'A valid event_id is required' });
+  }
+
+  // The column carries CHECK (rating >= 1 AND rating <= 5). Validate here so a
+  // bad value returns a clear 400 rather than a constraint-violation 500.
+  if (rating != null && (!Number.isInteger(Number(rating)) || rating < 1 || rating > 5)) {
+    return res.status(400).json({ message: 'Rating must be an integer between 1 and 5' });
+  }
+
   try {
-    // Get the club_id from the events table
-    const clubResult = await db.query(
-      'SELECT club_id FROM events WHERE id = $1',
-      [event_id]
+    // Pull the title alongside club_id — the club dashboard renders the event
+    // title in its live feedback toast, and fetching it here avoids a second
+    // round trip on the client.
+    const eventResult = await db.query(
+      'SELECT club_id, title FROM events WHERE id = $1',
+      [eventId]
     );
 
-    if (clubResult.rows.length === 0) {
+    if (eventResult.rows.length === 0) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    const club_id = clubResult.rows[0].club_id;
+    const { club_id, title } = eventResult.rows[0];
 
-    // Insert into event_feedbacks
     await db.query(
       `INSERT INTO event_feedbacks (user_id, event_id, rating, comment, club_id)
        VALUES ($1, $2, $3, $4, $5)`,
-      [userId, event_id, rating, comment, club_id]
+      [userId, eventId, rating, comment, club_id]
     );
+
+    broadcastNewFeedback(req, {
+      clubId: club_id,
+      eventId,
+      eventTitle: title,
+      rating,
+    });
 
     res.json({ message: 'Feedback submitted' });
 

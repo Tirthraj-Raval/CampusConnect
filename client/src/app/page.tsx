@@ -12,7 +12,12 @@ import TestimonialsSection from '../../components/TestimonialsSection'
 import CTA from '../../components/CTA'
 import Footer from '../../components/Footer'
 import AnimatedBackground from '../../components/AnimatedBackground'
-import StudentDashboard from '../../components/StudentDashboard'
+// NOTE: components/StudentDashboard.tsx is intentionally NOT rendered here.
+// It is a 1,718-line prototype with no API calls at all — every club, event,
+// certificate and activity item in it is invented, and it even substitutes a
+// mock user for the signed-in one. Showing it to a real student presented
+// fiction as their own data. It is kept in the tree as a design reference for
+// the real personalised feed (roadmap Phase 12); do not wire it back in.
 
 export default function HomePage() {
   const [scrolled, setScrolled] = useState(false)
@@ -78,9 +83,7 @@ export default function HomePage() {
         logout={logout} 
       />
 
-      {userType=="student" ? <StudentDashboard userType = {userType} logout = {logout} /> : null}
-      
-      <HeroSection 
+      <HeroSection
         user={user} 
         handleGoogleLogin={handleGoogleLogin} 
       />
