@@ -1,8 +1,3 @@
-Sure! Here's a **detailed, styled, production-grade `README.md`** for your project, written entirely in a markdown canvas block:
-
----
-
-  
 # 🎓 CampusConnect
 
 > An all-in-one university student engagement platform featuring student dashboards, club management, real-time event tracking, certificate generation, analytics, and live notifications.
@@ -208,4 +203,5 @@ npm run dev      # from server/
 
 ## 📄 License
 
-This project is licensed under the MIT License. See `LICENSE` for more info.
+No license has been granted for this project yet, so all rights are reserved by
+the author. A license may be added in a future release.

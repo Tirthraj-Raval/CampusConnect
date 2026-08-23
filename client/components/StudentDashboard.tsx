@@ -1,13 +1,34 @@
+// ============================================================================
+// UNRENDERED PROTOTYPE — kept as a design reference only.
+// ============================================================================
+// This component is deliberately not mounted anywhere. It was previously
+// rendered on the home page for signed-in students, where it presented entirely
+// invented data as if it were theirs: eight fictional clubs with member counts,
+// events such as "Hack the Future 2023" offering "$10,000 in prizes", fake
+// certificates, a fake friends-activity feed, and a `mockUser` that overrode the
+// real signed-in user. It makes zero API calls.
+//
+// It is retained because the layout and visual treatment are worth drawing from
+// when the real personalised feed is built (roadmap Phase 12).
+//
+// If you reuse anything here, carry over the DESIGN only. Do not carry over:
+//   - any of the mock data arrays or `mockUser`
+//   - the placeholder navigation, which pointed at /profile, /settings, /help
+//     and /friends (none of these routes exist) and at /api/auth/signout, a
+//     leftover from NextAuth in what is a Passport app
+// Those links have been converted to inert buttons so they cannot be copied
+// into real code by accident.
+// ============================================================================
 'use client'
 
 import { motion, AnimatePresence, useAnimation } from 'framer-motion'
 import Image from 'next/image'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { FiCalendar, FiUsers, FiAward, FiBookmark, FiBell, FiSearch, FiHome, FiMessageSquare, FiSettings, FiLogOut } from 'react-icons/fi'
+import { useAuth } from '../src/app/context/AuthProvider'
+import { FiCalendar, FiUsers, FiBell, FiSearch, FiHome, FiMessageSquare, FiSettings, FiLogOut } from 'react-icons/fi'
 import { FaUserFriends, FaRegCalendarAlt, FaTrophy, FaRegBookmark } from 'react-icons/fa'
 import { IoMdNotificationsOutline } from 'react-icons/io'
-import { BsEmojiSmile, BsThreeDotsVertical } from 'react-icons/bs'
 import { RiLiveLine } from 'react-icons/ri'
 import { TbCertificate } from 'react-icons/tb'
 
@@ -93,6 +114,10 @@ interface Certificate {
 
 const PremiumStudentDashboard = ({userType, logout}: StudentDashboardProps) => {
   const router = useRouter()
+  // Needed to build the real student dashboard URL, which is id-scoped
+  // (/students/:id/dashboard). Available because AuthProvider wraps the app in
+  // src/app/layout.tsx.
+  const { user: authUser } = useAuth()
   const controls = useAnimation()
   const notificationPanelRef = useRef<HTMLDivElement>(null)
   const profileMenuRef = useRef<HTMLDivElement>(null)
@@ -430,6 +455,7 @@ const PremiumStudentDashboard = ({userType, logout}: StudentDashboardProps) => {
           transition: { duration: 0.5 }
         })
       } catch (err) {
+        console.error('Failed to load user data:', err)
         setError('Failed to load user data')
         setLoading(false)
       }
@@ -466,12 +492,19 @@ const PremiumStudentDashboard = ({userType, logout}: StudentDashboardProps) => {
     }
   }, [])
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login')
-    }
-  }, [status, router])
+  // NOTE: a "redirect if not authenticated" effect was removed here.
+  //
+  // It read `if (status === 'unauthenticated') router.push('/login')`, but
+  // `status` was never declared in this file — not state, not a prop, not an
+  // import. It silently resolved to `window.status`, the deprecated DOM string
+  // property, which is '' by default, so the condition was permanently false and
+  // the effect did nothing. The identifier is a leftover from NextAuth's
+  // useSession() shape; this project authenticates via Passport and AuthProvider.
+  //
+  // It was also pointing at '/login', which is not a route in this app (the real
+  // ones are '/student-login' and '/club-login'), so had it ever fired it would
+  // have 404'd. The guard is redundant regardless: src/app/page.tsx only mounts
+  // this component when userType === 'student'.
 
   // Mark notification as read
   const markAsRead = (id: number) => {
@@ -747,7 +780,13 @@ const PremiumStudentDashboard = ({userType, logout}: StudentDashboardProps) => {
                         <div 
                           className="px-4 py-2 text-center text-sm font-medium text-emerald-600 bg-gray-50 hover:bg-gray-100 border-t border-gray-200 cursor-pointer"
                           onClick={() => {
-                            router.push('/notifications')
+                            // Was router.push('/notifications') — a route that
+                            // does not exist in this app, so this button 404'd.
+                            // The real notifications list lives in the
+                            // id-scoped student dashboard.
+                            if (authUser?.id) {
+                              router.push(`/students/${authUser.id}/dashboard`)
+                            }
                             setShowNotificationPanel(false)
                           }}
                         >
@@ -787,30 +826,30 @@ const PremiumStudentDashboard = ({userType, logout}: StudentDashboardProps) => {
                       className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg z-50 border border-gray-200"
                     >
                       <div className="py-1">
-                        <a 
-                          href="/profile" 
-                          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                        <button
+                          type="button"
+                          className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
                           onClick={() => setShowProfileMenu(false)}
                         >
                           <FiHome className="mr-2" />
                           Your Profile
-                        </a>
-                        <a 
-                          href="/settings" 
-                          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                        </button>
+                        <button
+                          type="button"
+                          className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
                           onClick={() => setShowProfileMenu(false)}
                         >
                           <FiSettings className="mr-2" />
                           Settings
-                        </a>
-                        <a 
-                          href="/help" 
-                          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                        </button>
+                        <button
+                          type="button"
+                          className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
                           onClick={() => setShowProfileMenu(false)}
                         >
                           <FiMessageSquare className="mr-2" />
                           Help Center
-                        </a>
+                        </button>
                         <div className="border-t border-gray-200"></div>
                         <a 
                           className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
@@ -879,9 +918,9 @@ const PremiumStudentDashboard = ({userType, logout}: StudentDashboardProps) => {
                   </div>
                 </div>
                 <div className="mt-3 px-2 space-y-1">
-                  <a href="/profile" className="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100">Your Profile</a>
-                  <a href="/settings" className="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100">Settings</a>
-                  <a href="/api/auth/signout" className="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100">Logout</a>
+                  <button type="button" className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100">Your Profile</button>
+                  <button type="button" className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100">Settings</button>
+                  <button type="button" onClick={logout} className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100">Logout</button>
                 </div>
               </div>
             </motion.div>
@@ -1091,9 +1130,9 @@ const PremiumStudentDashboard = ({userType, logout}: StudentDashboardProps) => {
                 )}
                 {user.friends.length > 5 && (
                   <div className="px-6 py-3 text-center bg-gray-50">
-                    <a href="/friends" className="text-sm font-medium text-emerald-600 hover:text-emerald-800">
+                    <button type="button" className="text-sm font-medium text-emerald-600 hover:text-emerald-800">
                       View all activity
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1427,7 +1466,11 @@ const PremiumStudentDashboard = ({userType, logout}: StudentDashboardProps) => {
                                     </div>
                                     <div className="flex space-x-2">
                                       <motion.button 
-                                        onClick={() => router.push(`/clubs/${club.id}`)}
+                                        // `/clubs/<id>` has no page.tsx, so this
+                                        // 404'd. The public club page is
+                                        // /clubs/<id>/about, which is what
+                                        // src/app/clubs/page.tsx navigates to.
+                                        onClick={() => router.push(`/clubs/${club.id}/about`)}
                                         className="text-sm bg-gray-100 text-gray-800 px-3 py-1.5 rounded-full font-medium shadow-sm hover:bg-gray-200 transition-all duration-300"
                                         whileHover={{ scale: 1.05 }}
                                         whileTap={{ scale: 0.95 }}

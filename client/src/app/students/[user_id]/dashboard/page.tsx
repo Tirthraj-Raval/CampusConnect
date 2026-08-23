@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { io, type Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Bell, 
-  User, 
-  Calendar, 
-  Award, 
-  Search, 
-  Settings, 
+import SafeHtml from '../../../../../components/SafeHtml';
+// Only the icons actually rendered by this file are imported.
+import {
+  Bell,
+  User,
+  Calendar,
+  Award,
+  Search,
   Activity,
   Users,
   Star,
@@ -27,17 +28,8 @@ import {
   CheckCircle,
   AlertCircle,
   XCircle,
-  Plus,
-  Minus,
-  Eye,
-  Edit,
-  Trash2,
   Filter,
   Download,
-  Share2,
-  RefreshCw,
-  ChevronRight,
-  ChevronLeft,
   Menu,
   X,
   ArrowLeft,
@@ -125,9 +117,8 @@ export default function StudentDashboard() {
   const [feedback, setFeedback] = useState<any | null>(null);
   const [updateName, setUpdateName] = useState('');
   const [updatePic, setUpdatePic] = useState('');
-  const [newClubId, setNewClubId] = useState('');
-  const [newEventId, setNewEventId] = useState('');
-  const [feedbackEventId, setFeedbackEventId] = useState('');
+  // newClubId / newEventId / feedbackEventId state removed — declared but never
+  // read or written anywhere in this component.
   const [feedbackRating, setFeedbackRating] = useState(5);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [getFeedbackEventId, setGetFeedbackEventId] = useState('');
@@ -241,17 +232,18 @@ const [showFilters, setShowFilters] = useState(false);
     fetchNotifications();
     fetchActivityStatus();
     fetchClubs();
-    
-    // Show initial floating notifications after data loads
-    showInitialFloatingNotifications();
+    // The summary toast used to be fired here too, but every fetch above is
+    // async — at this point all four state arrays are still empty, so it
+    // computed nothing. The dedicated effect below fires it once data arrives.
   }, []);
 
-  useEffect(() => {
-    showInitialFloatingNotifications();
-  }, [notifications]);
-
-  // Show meaningful floating notifications based on data
-  const showInitialFloatingNotifications = () => {
+  // Show meaningful floating notifications based on data.
+  //
+  // Memoised over the four arrays it reads. Previously this was a plain function
+  // invoked from an effect keyed only on [notifications], which captured rsvps,
+  // subscriptions and certificates from whichever render the effect last ran in
+  // — a stale closure that reported counts from a previous state.
+  const showInitialFloatingNotifications = useCallback(() => {
     const newNotifications = [];
     
     // Show unread notifications count
@@ -299,7 +291,6 @@ const [showFilters, setShowFilters] = useState(false);
         timestamp: new Date().toISOString()
       });
     }
-    console.log("New Notifications:", newNotifications);
     setFloatingNotifications(newNotifications);
 
     // Remove them after 5 seconds each
@@ -308,16 +299,62 @@ const [showFilters, setShowFilters] = useState(false);
         setFloatingNotifications(prev => prev.filter(n => n.id !== notif.id));
       }, 5000 + (index * 1000));
     });
-  };
+  }, [notifications, rsvps, subscriptions, certificates]);
+
+  // Fire the summary toast exactly once, on the first render where any data has
+  // actually arrived. The ref guard matters: the callback above changes identity
+  // whenever any of the four arrays changes, and each of those resolves from its
+  // own fetch, so without it the user would get the same summary re-shown up to
+  // four times in a row as the responses trickle in.
+  const hasShownInitialSummary = useRef(false);
+
+  useEffect(() => {
+    if (hasShownInitialSummary.current) return;
+
+    const hasAnyData =
+      notifications.length > 0 ||
+      rsvps.length > 0 ||
+      subscriptions.length > 0 ||
+      certificates.length > 0;
+
+    if (!hasAnyData) return;
+
+    hasShownInitialSummary.current = true;
+    showInitialFloatingNotifications();
+  }, [notifications, rsvps, subscriptions, certificates, showInitialFloatingNotifications]);
 
   // Socket initialization
   useEffect(() => {
     const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
     if (!socketRef.current) {
       const socket = io(apiBase, {
-        transports: ['websocket'],
+        // See the club dashboard for the full reasoning: keeping 'polling' in
+        // the list preserves Socket.IO's fallback path, so a blocked WebSocket
+        // handshake degrades to long-polling instead of silently killing every
+        // live feature.
+        transports: ['polling', 'websocket'],
         withCredentials: true,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        // Socket.IO's default connection timeout is 20s. The API is deployed on
+        // a host that suspends idle containers, and a cold start regularly takes
+        // longer than that — so the first connection after any idle period
+        // failed with `timeout` before the backend had finished waking up. 45s
+        // covers a cold start; the reconnection settings above cover anything
+        // slower than that.
+        timeout: 45000,
       });
+
+      socket.on('connect_error', (err) => {
+        // Non-fatal. Reconnection is enabled with unlimited attempts, so this
+        // fires during backend cold starts and brief network drops and then
+        // resolves itself. Logged as a warning rather than an error so a
+        // self-healing condition doesn't read as a broken app.
+        console.warn('[socket] connection error, retrying:', err.message);
+      });
+
       socketRef.current = socket;
     }
 
@@ -329,12 +366,21 @@ const [showFilters, setShowFilters] = useState(false);
     };
   }, []);
 
-  // Socket event handlers
+  // Socket event handlers.
+  // Note: the server AUTO-JOINS `user_<id>` on connect based on the session
+  // cookie, so we don't need to emit join_user_room here. Emitting it as a
+  // belt-and-suspenders is still safe (the server verifies ownership).
  useEffect(() => {
   const socket = socketRef.current;
   if (!socket) return;
 
-  let joinedRooms: string[] = [];
+  const joinedEventIds: (string | number)[] = [];
+
+  // Belt-and-suspenders: emit join_user_room once we know the student id,
+  // in case the socket connected before the session cookie hydrated.
+  if (student?.id) {
+    socket.emit('join_user_room', student.id);
+  }
 
   const fetchAndSubscribe = async () => {
     try {
@@ -342,14 +388,17 @@ const [showFilters, setShowFilters] = useState(false);
       const res = await fetch(`${apiBase}/api/student/event-capacity`, {
         credentials: 'include',
       });
-      const data = await res.json();
-      console.log('Fetched event capacities:', data);
+      const data = await res.json() || [];
       setEvents(data);
 
-      data.forEach((event: EventCapacity) => {
-        const room = `event_${event.eventId}`;
-        socket.emit('join_event_room', room);
-        joinedRooms.push(room);
+      // BUG fix: the original was `data ?? data.forEach(...)` which is a no-op
+      // (`??` only evaluates the right side when `data` is nullish). It also
+      // sent full room strings — the server prefixes the room name itself, so
+      // clients must send bare IDs.
+      joinedEventIds.length = 0;
+      (Array.isArray(data) ? data : []).forEach((event: EventCapacity) => {
+        socket.emit('join_event_room', event.eventId);
+        joinedEventIds.push(event.eventId);
       });
     } catch (err) {
       console.error('Failed to fetch event capacities:', err);
@@ -358,12 +407,35 @@ const [showFilters, setShowFilters] = useState(false);
 
   fetchAndSubscribe();
 
-  const rsvpHandler = (data: { eventId: number; currentCount: number }) => {
+  // Re-subscribe after a reconnect.
+  //
+  // The server auto-joins `user_<id>` on every connection because that room is
+  // derived from the session, but `event_<id>` rooms are joined by the client.
+  // A dropped connection — laptop sleeping, a wifi blip, the dev server
+  // restarting — therefore left the student in their personal room but in no
+  // event rooms at all, so seat counters silently stopped updating until a
+  // manual page refresh. Re-fetching here also picks up any change that
+  // happened while the socket was down.
+  const handleReconnect = () => {
+    if (student?.id) {
+      socket.emit('join_user_room', student.id);
+    }
+    fetchAndSubscribe();
+  };
+
+  socket.on('connect', handleReconnect);
+
+  const rsvpHandler = (data: { eventId: number | string; currentCount: number }) => {
     console.log('📡 RSVP Update Received:', data);
     setEvents((prev) =>
       prev.map((ev) =>
-        ev.eventId === data.eventId
-          ? { ...ev, currentCount: data.currentCount }
+        // Compare as strings deliberately. The server now normalises ids before
+        // broadcasting, but an id that arrives over the wire as "12" must still
+        // match local state holding 12 — a strict === between those two is
+        // false, which is precisely why cancelling an RSVP used to leave the
+        // seat counter stale until a manual refresh.
+        String(ev.eventId) === String(data.eventId)
+          ? { ...ev, currentCount: Number(data.currentCount) }
           : ev
       )
     );
@@ -372,10 +444,9 @@ const [showFilters, setShowFilters] = useState(false);
   const notificationHandler = (notification: any) => {
     console.log('🔔 New Notification received:', notification);
     setNotifications(prev => [notification, ...prev]);
-    
-    // Create a unique ID for the floating notification
+
     const notificationId = `notif-${Date.now()}`;
-    
+
     setFloatingNotifications(prev => [...prev, {
       id: notificationId,
       message: notification.message,
@@ -383,8 +454,7 @@ const [showFilters, setShowFilters] = useState(false);
       emoji: '🔔',
       timestamp: new Date().toISOString()
     }]);
-    
-    // Remove floating notification after 5 seconds using the correct ID
+
     setTimeout(() => {
       setFloatingNotifications(prev => prev.filter(n => n.id !== notificationId));
     }, 5000);
@@ -394,13 +464,14 @@ const [showFilters, setShowFilters] = useState(false);
   socket.on('new_notification', notificationHandler);
 
   return () => {
+    socket.off('connect', handleReconnect);
     socket.off('rsvp_update', rsvpHandler);
     socket.off('new_notification', notificationHandler);
-    joinedRooms.forEach((room) => {
-      socket.emit('leave_event_room', room);
+    joinedEventIds.forEach((eventId) => {
+      socket.emit('leave_event_room', eventId);
     });
   };
-}, []);
+}, [student?.id]);
 
   // Search functionality
   const fetchSearchResults = async (query: string) => {
@@ -622,10 +693,19 @@ const [showFilters, setShowFilters] = useState(false);
       } else {
         showSuccessToast('RSVP successful!');
         fetchRsvps();
+        // Prefer the authoritative count the server just computed inside its
+        // transaction. Falling back to a local increment keeps the counter
+        // responsive if an older server build omits the field.
         setEvents(prev =>
           prev.map(event =>
-            event.eventId === Number(eventId)
-              ? { ...event, currentCount: event.currentCount + 1 }
+            String(event.eventId) === String(eventId)
+              ? {
+                  ...event,
+                  currentCount:
+                    typeof data.currentCount === 'number'
+                      ? data.currentCount
+                      : event.currentCount + 1,
+                }
               : event
           )
         );
@@ -647,10 +727,19 @@ const [showFilters, setShowFilters] = useState(false);
       if (res.ok) {
         showSuccessToast(data.message);
         fetchRsvps();
+        // Same reasoning as rsvpEvent: trust the server's post-transaction
+        // count, and clamp the fallback at zero so a stale local value can
+        // never render a negative seat count.
         setEvents(prev =>
           prev.map(event =>
-            event.eventId === eventId
-              ? { ...event, currentCount: event.currentCount - 1 }
+            String(event.eventId) === String(eventId)
+              ? {
+                  ...event,
+                  currentCount:
+                    typeof data.currentCount === 'number'
+                      ? data.currentCount
+                      : Math.max(0, event.currentCount - 1),
+                }
               : event
           )
         );
@@ -680,7 +769,8 @@ const [showFilters, setShowFilters] = useState(false);
       const data = await res.json();
       if (res.ok) {
         showSuccessToast(data.message);
-        setFeedbackEventId('');
+        // feedbackEventId reset dropped along with the state itself — it was
+        // written here and nowhere else, and never read.
         setFeedbackRating(5);
         setFeedbackComment('');
         setEventSearchQuery('');
@@ -904,7 +994,7 @@ const [showFilters, setShowFilters] = useState(false);
     const myRsvps = rsvps.length;
     const mySubscriptions = subscriptions.length;
     const myCertificates = certificates.length;
-    const unreadNotifications = notifications.filter(n => !n.read_at).length;
+    const unreadNotifications = notifications?.filter(n => !n.read_at).length;
     
     return {
       totalEvents,
@@ -1806,9 +1896,9 @@ const [showFilters, setShowFilters] = useState(false);
             {selectedClub.about_html && (
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
                 <h3 className="text-xl font-bold text-gray-800 mb-4">About This Club</h3>
-                <div 
+                <SafeHtml
                   className="prose max-w-none text-gray-700"
-                  dangerouslySetInnerHTML={{ __html: selectedClub.about_html }}
+                  html={selectedClub.about_html}
                 />
               </div>
             )}
@@ -2181,7 +2271,12 @@ const [showFilters, setShowFilters] = useState(false);
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {certificates.map((cert, index) => (
               <motion.div
-                key={cert.event_id}
+                // Keyed on the certificate's own id, not event_id: a student can
+                // hold more than one certificate for the same event, and
+                // event_id is now nullable (it is set to NULL when an event is
+                // deleted so the certificate survives). Either case produced
+                // duplicate or null React keys.
+                key={cert.id}
                 variants={cardVariants}
                 whileHover="hover"
                 initial={{ opacity: 0, y: 20 }}
@@ -2801,9 +2896,9 @@ const [showFilters, setShowFilters] = useState(false);
                     Back to Dashboard
                   </motion.button>
                 </div>
-                <div 
+                <SafeHtml
                   className="bg-gray-50 rounded-2xl p-6 border border-gray-200"
-                  dangerouslySetInnerHTML={{ __html: selectedEvent.custom_html }}
+                  html={selectedEvent.custom_html}
                 />
               </div>
             )}
@@ -2904,9 +2999,9 @@ const [showFilters, setShowFilters] = useState(false);
                 </motion.button>
                 
                 <div id="club-more-info-section" style={{ display: 'none' }} className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-                  <div 
+                  <SafeHtml
                     className="prose max-w-none"
-                    dangerouslySetInnerHTML={{ __html: selectedClub.about_html }}
+                    html={selectedClub.about_html}
                   />
                 </div>
               </div>

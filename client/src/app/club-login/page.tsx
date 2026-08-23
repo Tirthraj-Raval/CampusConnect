@@ -17,7 +17,9 @@ export default function ClubLoginPage() {
       // Redirect to your backend OAuth endpoint
       window.location.href = `${apiBase}/auth/club/google`;
     } catch (err) {
-      console.error("Login failed. Please try again.");
+      // Log the actual error rather than a fixed string — the previous version
+      // discarded it, so a genuine failure here left no diagnostic behind.
+      console.error('Club login redirect failed:', err);
     } finally {
       setLoading(false);
     }

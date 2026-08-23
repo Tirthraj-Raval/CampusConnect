@@ -1,56 +1,44 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { io, Socket } from 'socket.io-client';
+import { useParams } from 'next/navigation';
+import { io, type Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Bell, 
-  User, 
-  Calendar, 
-  Award, 
-  Search, 
-  Settings, 
-  Activity,
+import SafeHtml from '../../../../../components/SafeHtml';
+// Only the icons actually rendered by this file are imported. The unused ones
+// still counted toward the client bundle's module graph.
+import {
+  Bell,
+  User,
+  Calendar,
+  Award,
+  Search,
+  Settings,
   Users,
   Star,
   MessageSquare,
   TrendingUp,
-  Clock,
   MapPin,
   Bookmark,
   Home,
   BarChart3,
-  PieChart as PieChartIcon,
   Target,
-  Zap,
-  Heart,
   CheckCircle,
-  AlertCircle,
   XCircle,
   Plus,
-  Minus,
   Eye,
   Edit,
   Trash2,
-  Filter,
   Download,
-  Share2,
-  RefreshCw,
   ChevronRight,
   ChevronLeft,
   Menu,
   X,
-  ArrowLeft,
   Info,
   Send,
   UserPlus,
   Shield,
-  Crown,
-  Mail,
-  Calendar as CalendarIcon,
-  Upload,
-  ExternalLink
+  Crown
 } from 'lucide-react';
 import { BarChart,Legend,  Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
 
@@ -158,10 +146,18 @@ export default function ClubDashboard() {
   const params = useParams();
   const clubId = params?.club_id as string;
 
-  if (!clubId) {
-    console.error('Club ID is undefined. Please check the route.');
-    return <div>Error: Club ID is missing. Please check the URL.</div>;
-  }
+  // NOTE: there is deliberately no early `return` here.
+  //
+  // This component previously bailed out with `if (!clubId) return <div>…</div>`
+  // at this point — before all 45 of the hooks below. That breaks React's Rules
+  // of Hooks: on a render where clubId was falsy, zero hooks ran; on the next
+  // render where it was truthy, 45 ran. React tracks hooks positionally, so
+  // that mismatch throws "Rendered fewer hooks than expected" and unmounts the
+  // whole dashboard.
+  //
+  // The guard now lives after every hook has been declared (search for
+  // "clubId is missing" further down), which keeps the hook order identical on
+  // every render. Effects that need clubId check it themselves.
   const socketRef = useRef<Socket | null>(null);
 
   // State Management
@@ -304,11 +300,21 @@ export default function ClubDashboard() {
     }, 4000);
   };
 
-  // Fetch all data for the dashboard
-  const fetchData = useCallback(async () => {
-    console.log('Fetching data for club:', clubId);
+  // Fetch all data for the dashboard.
+  //
+  // `silent` exists because this function serves two very different callers:
+  //
+  //   - the initial mount, which SHOULD show the full-screen spinner; and
+  //   - real-time socket events (rsvp_update, new_subscription, new_feedback,
+  //     subscription_removed), which should refresh the numbers in place.
+  //
+  // Toggling `loading` unconditionally meant every socket event replaced the
+  // entire dashboard with the loading spinner and then rebuilt it — so a single
+  // student RSVP made the club's page visibly "reload itself". Live refreshes
+  // now leave `loading` untouched and simply swap the data in when it arrives.
+  const fetchData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!clubId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
       const [
@@ -406,42 +412,108 @@ export default function ClubDashboard() {
 
       if (rsvpsRes.ok) {
         const rsvpsData = await rsvpsRes.json();
-        console.log('RSVPs Data:', rsvpsData);
         setRsvps(rsvpsData);
       }
 
     } catch (error) {
       console.error('Fetch error:', error);
-      showErrorToast('Failed to load dashboard data');
+      // Don't interrupt the user with an error toast for a background refresh
+      // that failed — the data on screen is still valid, just slightly stale,
+      // and the next event will retry.
+      if (!silent) {
+        showErrorToast('Failed to load dashboard data');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [clubId]);
 
   // Initialize WebSocket and fetch initial data
   useEffect(() => {
+    // Guarded here rather than by an early return at the top of the component,
+    // so that the hook itself always runs and hook order stays stable.
+    if (!clubId) return;
+
+    // Initial load: this one DOES show the spinner.
     fetchData();
+
+    // Coalesce bursts of socket events into a single background refresh.
+    //
+    // Each refresh hits eight endpoints. During a popular event dozens of
+    // students can RSVP within a few seconds, and firing a full refetch per
+    // event would put the dashboard into a permanent request storm. A short
+    // trailing debounce collapses a burst into one refresh once it settles.
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleSilentRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        fetchData({ silent: true });
+      }, 400);
+    };
 
     // Initialize WebSocket
     const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
     if (!socketRef.current) {
       const socket = io(apiBase, {
-        transports: ['websocket'],
+        // Deliberately NOT locked to ['websocket'].
+        //
+        // Socket.IO's default is to connect over HTTP long-polling and then
+        // upgrade to a raw WebSocket. Forcing websocket-only removes that
+        // fallback, so anywhere the WebSocket handshake is blocked — corporate
+        // or campus proxies, some browser extensions, certain TLS-terminating
+        // load balancers — the socket silently never connects and every live
+        // feature dies with nothing logged. Keeping polling in the list means
+        // the connection degrades instead of failing.
+        transports: ['polling', 'websocket'],
         withCredentials: true,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        // Socket.IO's default connection timeout is 20s, which is shorter than
+        // a cold start on a host that suspends idle containers. The result was
+        // that the first connection after any idle period reliably failed with
+        // `timeout` while the backend was still waking up. 45s covers a cold
+        // start; the reconnection settings above cover anything slower.
+        timeout: 45000,
       });
       socketRef.current = socket;
 
-      // Join club room for real-time updates
-      socket.emit('join_club_room', `club_${clubId}`);
+      // Surface handshake failures. Without this a broken socket layer looks
+      // identical to "nothing is happening yet". Warning rather than error:
+      // reconnection is unlimited, so this is a transient, self-healing state.
+      socket.on('connect_error', (err) => {
+        console.warn('[socket] connection error, retrying:', err.message);
+      });
 
-      // Listen for real-time updates
-      socket.on('rsvp_update', (data: any) => {
-        console.log('📡 RSVP Update Received:', data);
-        fetchData(); // Refresh data on RSVP updates
+      // Join club room for real-time updates. Send the bare id — the server
+      // owns the room name (`club_<id>`). The server also auto-joins this room
+      // on connect based on the club-account session, so this is really just
+      // a legacy safety net.
+      socket.emit('join_club_room', clubId);
+
+      // Re-join and re-sync after a reconnect. The `hasConnectedOnce` flag keeps
+      // the very first 'connect' from triggering a refresh, since the explicit
+      // fetchData() above has already just run.
+      let hasConnectedOnce = false;
+      socket.on('connect', () => {
+        socket.emit('join_club_room', clubId);
+        if (hasConnectedOnce) {
+          // Anything that happened while the socket was down was missed, so
+          // pull fresh data rather than waiting for the next live event.
+          scheduleSilentRefresh();
+        }
+        hasConnectedOnce = true;
+      });
+
+      // Listen for real-time updates. All of these refresh silently — a live
+      // update must never blank the dashboard out behind a spinner.
+      socket.on('rsvp_update', () => {
+        scheduleSilentRefresh();
       });
 
       socket.on('new_subscription', (data: any) => {
-        console.log('📡 New Subscription:', data);
         setFloatingNotifications(prev => [...prev, {
           id: `sub-${Date.now()}`,
           message: `New subscriber: ${data.user_name}`,
@@ -449,11 +521,16 @@ export default function ClubDashboard() {
           emoji: '🎉',
           timestamp: new Date().toISOString()
         }]);
-        fetchData();
+        scheduleSilentRefresh();
+      });
+
+      // Counterpart to new_subscription. Without this the subscriber figure
+      // only ever climbed during a session and had to be reloaded to fall.
+      socket.on('subscription_removed', () => {
+        scheduleSilentRefresh();
       });
 
       socket.on('new_feedback', (data: any) => {
-        console.log('📡 New Feedback:', data);
         setFloatingNotifications(prev => [...prev, {
           id: `feedback-${Date.now()}`,
           message: `New feedback for ${data.event_title}`,
@@ -461,13 +538,17 @@ export default function ClubDashboard() {
           emoji: '💬',
           timestamp: new Date().toISOString()
         }]);
-        fetchData();
+        scheduleSilentRefresh();
       });
     }
 
     return () => {
+      // Cancel any pending debounced refresh, otherwise it fires after unmount
+      // and calls setState on a component that no longer exists.
+      if (refreshTimer) clearTimeout(refreshTimer);
+
       if (socketRef.current) {
-        socketRef.current.emit('leave_club_room', `club_${clubId}`);
+        socketRef.current.emit('leave_club_room', clubId);
         socketRef.current.disconnect();
         socketRef.current = null;
       }
@@ -505,7 +586,11 @@ export default function ClubDashboard() {
     } catch (error) {
       console.error('User search error:', error);
     }
-  }, [clubData?.id]);
+    // Depend on the field this callback actually reads (university_id), not on
+    // clubData.id. They happen to load together today, so the bug was latent,
+    // but keying the memo on a value the body never uses is how stale-closure
+    // bugs get introduced later.
+  }, [clubData?.university_id]);
 
   // Debounced user search
   useEffect(() => {
@@ -2280,9 +2365,9 @@ export default function ClubDashboard() {
             />
             <div className="mt-4 p-4 border border-gray-300 rounded-lg bg-gray-50">
               <h4 className="text-sm font-medium text-gray-700 mb-2">Preview:</h4>
-              <div
-              className="prose max-w-none"
-              dangerouslySetInnerHTML={{ __html: clubSettings.about_html }}
+              <SafeHtml
+                className="prose max-w-none"
+                html={clubSettings.about_html}
               />
             </div>
             </div>
@@ -2355,6 +2440,21 @@ export default function ClubDashboard() {
     }
   };
 
+  // The clubId guard that used to sit at the top of the component, relocated
+  // here so it runs after every hook has been declared. It is checked before
+  // `loading` because the data-fetching effect bails out when clubId is absent,
+  // which would otherwise leave the spinner running forever.
+  if (!clubId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Club ID is missing</h2>
+          <p className="text-gray-600">This URL does not include a club identifier. Please check the link.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
@@ -2372,7 +2472,7 @@ export default function ClubDashboard() {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Club Not Found</h2>
-          <p className="text-gray-600">The club you're looking for doesn't exist or you don't have access to it.</p>
+          <p className="text-gray-600">The club you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
         </div>
       </div>
     );
@@ -2795,11 +2895,9 @@ export default function ClubDashboard() {
                 <div className="mt-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Live HTML Preview</label>
                   <div className="border border-gray-300 rounded-lg p-4 bg-white">
-                    <div
+                    <SafeHtml
                       className="prose max-w-none"
-                      dangerouslySetInnerHTML={{
-                        __html: selectedEvent ? selectedEvent.custom_html || '' : newEvent.custom_html || ''
-                      }}
+                      html={selectedEvent ? selectedEvent.custom_html || '' : newEvent.custom_html || ''}
                     />
                   </div>
                 </div>

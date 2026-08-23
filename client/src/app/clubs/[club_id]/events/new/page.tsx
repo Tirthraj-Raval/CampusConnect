@@ -35,6 +35,7 @@ const CreateEvent = () => {
         setError(errorData.message || 'Failed to create event');
       }
     } catch (err) {
+      console.error('Create event failed:', err);
       setError('Network error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);

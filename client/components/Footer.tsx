@@ -1,8 +1,22 @@
 // components/home/Footer.tsx
 'use client'
 
-import Image from 'next/image'
-import Link from 'next/link'
+// Every link in this footer used to be href="#", advertising a Pricing page, a
+// Blog, a Help Center, Tutorials, Webinars, Careers and a Privacy Policy that
+// have never existed, plus four social accounts that don't exist either. It now
+// links only to destinations that are actually in the app.
+const exploreLinks = [
+  { label: 'Features', href: '#features' },
+  { label: 'How It Works', href: '#how-it-works' },
+  { label: 'Events', href: '#events' },
+  { label: "Who It's For", href: '#who-its-for' },
+]
+
+const clubLinks = [
+  { label: 'Browse Clubs', href: '/clubs' },
+  { label: 'Club Login', href: '/club-login' },
+  { label: 'Student Login', href: '/student-login' },
+]
 
 export default function Footer() {
   return (
@@ -13,61 +27,44 @@ export default function Footer() {
             Campus<span className="text-emerald-400">Connect</span>
           </div>
           <p className="mb-6">
-            Connecting students with campus life since 2023. Making college experiences unforgettable.
+            A single place for university clubs to run events and for students to
+            find them — registrations, feedback and certificates included.
           </p>
-          <div className="flex space-x-4">
-            {['twitter', 'facebook', 'instagram', 'linkedin'].map((social) => (
-              <a key={social} href="#" className="text-gray-400 hover:text-white transition">
-                <span className="sr-only">{social}</span>
-                <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center">
-                  <Image
-                    src={`/${social}-icon.svg`}
-                    alt={social}
-                    width={16}
-                    height={16}
-                  />
-                </div>
-              </a>
-            ))}
-          </div>
         </div>
-        
+
         <div>
-          <h3 className="text-white font-semibold mb-4">Product</h3>
+          <h3 className="text-white font-semibold mb-4">Explore</h3>
           <ul className="space-y-2">
-            {['Features', 'How It Works', 'Pricing', 'Testimonials'].map((item) => (
-              <li key={item}>
-                <a href="#" className="hover:text-white transition">{item}</a>
+            {exploreLinks.map((item) => (
+              <li key={item.href}>
+                <a href={item.href} className="hover:text-white transition">{item.label}</a>
               </li>
             ))}
           </ul>
         </div>
-        
+
         <div>
-          <h3 className="text-white font-semibold mb-4">Resources</h3>
+          <h3 className="text-white font-semibold mb-4">Get Started</h3>
           <ul className="space-y-2">
-            {['Blog', 'Help Center', 'Tutorials', 'Webinars'].map((item) => (
-              <li key={item}>
-                <a href="#" className="hover:text-white transition">{item}</a>
+            {clubLinks.map((item) => (
+              <li key={item.href}>
+                <a href={item.href} className="hover:text-white transition">{item.label}</a>
               </li>
             ))}
           </ul>
         </div>
-        
+
         <div>
-          <h3 className="text-white font-semibold mb-4">Company</h3>
-          <ul className="space-y-2">
-            {['About Us', 'Careers', 'Contact', 'Privacy Policy'].map((item) => (
-              <li key={item}>
-                <a href="#" className="hover:text-white transition">{item}</a>
-              </li>
-            ))}
-          </ul>
+          <h3 className="text-white font-semibold mb-4">About</h3>
+          <p className="text-sm leading-relaxed">
+            An independent project built for university clubs and students. Not
+            affiliated with, or endorsed by, any institution.
+          </p>
         </div>
       </div>
-      
+
       <div className="max-w-7xl mx-auto mt-12 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
-        © {new Date().getFullYear()} CampusConnect. All rights reserved. Built with ❤ by students for students.
+        © {new Date().getFullYear()} CampusConnect. All rights reserved. Built by a student, for students.
       </div>
     </footer>
   )

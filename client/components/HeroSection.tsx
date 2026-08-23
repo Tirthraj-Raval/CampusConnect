@@ -2,7 +2,6 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import Image from 'next/image'
 
 interface HeroSectionProps {
   user: { name: string; [key: string]: any } | null
@@ -21,7 +20,7 @@ export default function HeroSection({ user, handleGoogleLogin }: HeroSectionProp
         >
           <div className="inline-flex items-center px-4 py-2 bg-emerald-100 text-emerald-600 rounded-full text-sm font-medium mb-6">
             <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
-            Join 10,000+ students already connected
+            Free for every student and club on campus
           </div>
         </motion.div>
 

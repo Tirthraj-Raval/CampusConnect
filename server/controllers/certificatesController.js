@@ -1,6 +1,7 @@
 // server/controllers/certificatesController.js
 const pool = require('../utils/db');
 const { generatePdfFromHtml } = require('../utils/pdf');
+const { sanitizeRichHtml } = require('../utils/htmlSanitize');
 const path = require('path');
 const fs = require('fs');
 
@@ -31,6 +32,13 @@ exports.issueCertificates = async (req, res) => {
     return res.status(400).json({ error: 'Invalid input.' });
   }
 
+  // Sanitize the user-supplied template ONCE, up front. All downstream steps
+  // (placeholder substitution, PDF render, DB insert) use the safe copy.
+  const safeTemplate = sanitizeRichHtml(customHtml);
+  if (!safeTemplate) {
+    return res.status(400).json({ error: 'Certificate template failed sanitization.' });
+  }
+
   try {
     // Adjust this relative path to your project structure
     const certDir = path.join(__dirname, '../../client/public/certificates');
@@ -55,7 +63,7 @@ exports.issueCertificates = async (req, res) => {
       if (userRes.rowCount === 0) continue;
       const userName = userRes.rows[0].name;
 
-      const html = customHtml
+      const html = safeTemplate
         .replace(/{{name}}/g, userName)
         .replace(/{{event}}/g, eventTitle);
 
@@ -69,9 +77,9 @@ exports.issueCertificates = async (req, res) => {
       const url = `/certificates/${fileName}`;
 
       await pool.query(`
-        INSERT INTO certificates (user_id, event_id, certificate_url, custom_html)
-        VALUES ($1, $2, $3, $4)
-      `, [uid, eventId, url, customHtml]);
+        INSERT INTO certificates (user_id, event_id, certificate_url, custom_html, club_id)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [uid, eventId, url, safeTemplate, clubId]);
 
       generated.push({ userId: uid, url });
     }

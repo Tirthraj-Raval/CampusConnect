@@ -9,7 +9,9 @@ const ClubEvents = () => {
   const router = useRouter();
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // NOTE: an `error` state used to live here. It was written by both catch
+  // blocks but never rendered anywhere, so it had no effect. Both failure paths
+  // already call showNotification(), which is what the user actually sees.
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDate, setFilterDate] = useState('');
@@ -25,7 +27,7 @@ const ClubEvents = () => {
         const data = await res.json();
         setEvents(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
+        console.error('Failed to load events:', err);
         showNotification('Failed to load events', 'error');
       } finally {
         setLoading(false);
@@ -56,7 +58,7 @@ const ClubEvents = () => {
         throw new Error('Delete failed');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed');
+      console.error('Failed to delete event:', err);
       showNotification('Failed to delete event', 'error');
     } finally {
       setConfirmDelete(null);
@@ -296,10 +298,14 @@ const ClubEvents = () => {
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => router.push(`/clubs/${params.club_id}/events/${event.id}`)}
+                        // Was `/events/${event.id}`, which has no page.tsx —
+                        // only /edit and /registrations exist under it, so this
+                        // button 404'd. Registrations is the meaningful detail
+                        // view for a club, and the label now says so.
+                        onClick={() => router.push(`/clubs/${params.club_id}/events/${event.id}/registrations`)}
                         className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg font-medium shadow hover:bg-blue-700 transition-colors"
                       >
-                        View Details
+                        View Registrations
                       </motion.button>
                       <div className="flex space-x-2">
                         <button
@@ -370,7 +376,8 @@ const ClubEvents = () => {
                         <motion.button
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          onClick={() => router.push(`/clubs/${params.club_id}/events/${event.id}`)}
+                          // Same dead route as the card view above.
+                          onClick={() => router.push(`/clubs/${params.club_id}/events/${event.id}/registrations`)}
                           className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50"
                         >
                           View

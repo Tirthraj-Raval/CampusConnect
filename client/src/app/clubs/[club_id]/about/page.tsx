@@ -2,6 +2,7 @@
 
 import { use } from 'react';
 import React, { useEffect, useState } from 'react';
+import SafeHtml from '../../../../../components/SafeHtml';
 
 interface Club {
   id: string;
@@ -78,9 +79,9 @@ const ClubDashboard = ({ params }: { params: Promise<{ club_id: string }> }) => 
   {club.about_html && (
     <div className="mt-8">
       <h2 className="text-2xl font-bold text-sky-600 mb-4">About the Club</h2>
-      <div
+      <SafeHtml
         className="prose prose-sky max-w-none"
-        dangerouslySetInnerHTML={{ __html: club.about_html }}
+        html={club.about_html}
       />
     </div>
   )}

@@ -47,7 +47,7 @@ export default function CTA({ user, userType, logout }: CTAProps) {
           viewport={{ once: true }}
           className="text-lg md:text-xl mb-8 max-w-2xl mx-auto"
         >
-          Join thousands of students who are already discovering, participating, and celebrating with CampusConnect.
+          Sign in with your college Google account and start discovering, participating and celebrating with CampusConnect.
         </motion.p>
         
         <motion.div
